@@ -1,0 +1,15 @@
+zmq
+h5py
+gym[atari]
+tqdm
+imageio
+matplotlib
+Ipython
+pyyaml
+pyarrow
+lz4
+fabric2
+absl-py
+psutil
+tensorboardX
+setproctitle
