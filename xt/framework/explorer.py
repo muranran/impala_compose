@@ -50,7 +50,7 @@ class Explorer(object):
         self.report_stats_interval = max(config_info.get('env_num'), 7)
 
         self._buf_path = config_info["share_path"]
-        self._buf = ShareBuf(live=10, path=self._buf_path)  # live para is dummy
+        self._buf = ShareBuf(live=10, path=self._buf_path)  # live para is dummy ////
 
         logging.info("init explorer with id: {}, buf_path: {}".format(self.explorer_id, self._buf_path))
 
