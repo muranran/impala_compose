@@ -25,6 +25,7 @@ from multiprocessing import Queue
 from subprocess import PIPE, Popen
 
 import lz4.frame
+import pyarrow
 from pyarrow import deserialize, plasma, serialize
 
 from zeus.common.util.register import Registers

@@ -59,15 +59,17 @@ from xt.model.tf_utils import TFVariables, restore_tf_variable
 from xt.model.model_utils import state_transform, custom_norm_initializer
 from zeus.common.util.common import import_config
 from absl import logging
+from tensorflow_core.python.framework import graph_util
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 
 @Registers.model
-class ImpalaCnnOpt(XTModel):
+class ImpalaCnnOptLite(XTModel):
     """Docstring for ActorNetwork."""
 
     def __init__(self, model_info):
+        self.interpreter = None
         model_config = model_info.get("model_config", dict())
         import_config(globals(), model_config)
         self.dtype = DTYPE_MAP.get(model_info.get("default_dtype", "float32"))
@@ -269,7 +271,7 @@ class ImpalaCnnOpt(XTModel):
             )
         return loss
 
-    def predict(self, state):
+    def predict_(self, state):
         """
         Do predict use the newest model.
 
@@ -318,49 +320,89 @@ class ImpalaCnnOpt(XTModel):
     def load_lite_model(self):
         pass
 
-    def save_keras_model(self, file_name):
-        from tensorflow.keras import backend as K
-        # from tensorflow import keras
-        from tensorflow_core.python.framework import graph_util
-        # import tensorflow as tf
+    def predict(self, state):
+        # logging.info("================{} state shape {}================".format(state[0].shape))
+        # interpreter = self.interpreter["interpreter"]
+        state = [s.astype(np.float32) for s in state]
+        batch_size = self.interpreter["input_shape"][0]
+        real_batch_size = len(state)
+        # state = [np.zeros((84, 84, 4), dtype=np.float32) for i in range(5)]
+        # real_batch_size = 5
+        if real_batch_size > batch_size:
+            state_zero = np.zeros(state[0].shape, dtype=np.float32)
+            num_predict = real_batch_size // batch_size
+            rest_num = real_batch_size % batch_size
+            state_batch_resize = []
+            for i in range(num_predict):
+                state_batch_resize.append(state[i * batch_size: (i + 1) * batch_size])
+            state_batch_resize.append(
+                [*state[num_predict * batch_size:], *[state_zero for i in range(batch_size - rest_num)]])
+            pi_logic_outs = []
+            baseline = []
+            for s in state_batch_resize:
+                try:
+                    p, b = self.invoke(s)
+                    pi_logic_outs.extend(p)
+                    baseline.extend(b)
+                except ValueError as err:
+                    raise ValueError(err.args + ("| {} | {}".format((len(p), len(b)), (p, b)),))
+            # print(pi_logic_outs, baseline)
+            pi_logic_outs = pi_logic_outs[:real_batch_size]
+            baseline = baseline[:real_batch_size]
+            # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
+        elif real_batch_size == batch_size:
+            pi_logic_outs, baseline = self.invoke(state)
+        else:
+            raise NotImplementedError("state_batch_size < inference_batch_size | {} < {}"
+                                      .format(real_batch_size, batch_size))
 
-        def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
-            graph = session.graph
-            with graph.as_default():
-                freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
-                output_names = output_names or []
-                input_graph_def = graph.as_graph_def()
-                if clear_devices:
-                    for node in input_graph_def.node:
-                        node.device = ""
+        # raise RuntimeError("debug...input shape {} ".format(self.interpreter["input_shape"]))
+        actions = tf.squeeze(tf.multinomial(pi_logic_outs, num_samples=1, output_dtype=tf.int32))\
+            .eval(session=tf.Session())
+        # raise RuntimeError("debug...actions {} ".format(actions))
+        return pi_logic_outs, baseline, actions
 
-                frozen_graph = graph_util.convert_variables_to_constants(session, input_graph_def, output_names,
-                                                                         freeze_var_names)
-                if not clear_devices:
-                    for node in frozen_graph.node:
-                        node.device = "/GPU:0"
-                return frozen_graph
+    def create_tflite_interpreter(self, tflite_model_path):
+        # Load the TFLite model and allocate tensors.
+        interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
+        assert interpreter is not None, "Interpreter is None."
+        interpreter.allocate_tensors()
+        # print(output)
+        # Get input and output tensors.
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+        input_shape = input_details[0]['shape']
 
-        out_path = "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.pb"
-        # print("===========================")
-        # for t in self.explore_paras:
-        #     print(t.name)
-        # print("============================")
-        # print("===========================")
-        tensor_name_list = [tensor.name for tensor in self.graph.as_graph_def().node]
-        # print(tensor_name_list)
-        # with open("/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25_node_name.txt", "w+") as f:
-        #     for n in tensor_name_list:
-        #         f.write("{}\n".format(n))
-        # with open("/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25_trainable_node_name.txt", "w+") as f:
-        #     for n in self.explore_paras:
-        #         f.write("{}\n".format(n))
-        # print("============================")
+        # logging.info("================output details {}==================".format(output_details))
         # raise RuntimeError("debug...")
+
+        # update interpreter info
+        self.interpreter = {
+            "interpreter": interpreter,
+            "input_index": input_details[0]['index'],
+            "input_shape": input_shape,
+            "pi_logic_outs_index": output_details[0]['index'],
+            "baseline_index": output_details[1]['index'],
+        }
+
+    def invoke(self, state):
+        input_data = state
+        interpreter = self.interpreter["interpreter"]
+        interpreter.set_tensor(self.interpreter["input_index"], input_data)
+        interpreter.invoke()
+        pi_logic_outs = interpreter.get_tensor(self.interpreter["pi_logic_outs_index"])
+        baseline = interpreter.get_tensor(self.interpreter["baseline_index"])
+        # raise RuntimeError("debug...type: {} {}".format(type(pi_logic_outs), type(baseline)))
+        # a = np.array([])
+        return pi_logic_outs.tolist(), baseline.tolist()
+
+    def freeze_graph(self, save_path: str) -> str:
+        if save_path.endswith(".pb"):
+            out_path = save_path
+        else:
+            out_path = os.path.join(save_path, "model.pb")
         output_names = ["explore_agent/pi_logic_outs", "explore_agent/baseline"]
-        # frozen_graph = freeze_session(K.get_session(), output_names=output_names, clear_devices=True)
         input_graph_def = self.graph.as_graph_def()
-        # freeze_var_names = self.explore_paras
         freeze_var_names = ["state_input", "explore_agent/lambda/Cast", "explore_agent/lambda/truediv/y",
                             "explore_agent/lambda/truediv",
                             "explore_agent/conv2d/kernel/Initializer/random_uniform/shape",
@@ -456,52 +498,37 @@ class ImpalaCnnOpt(XTModel):
                             # "explore_agent/out_action"
                             ]
 
-        start_0 = time.time()
-
         frozen_graph = graph_util.convert_variables_to_constants(self.sess, input_graph_def, output_names,
                                                                  freeze_var_names)
         with open(out_path, "wb") as f:
             f.write(frozen_graph.SerializeToString())
 
-        interval_1 = time.time()
-        import tensorflow as tf
-        converter = tf.compat.v1.lite.TFLiteConverter.from_frozen_graph(
-            graph_def_file="/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.pb",
-            input_arrays=["state_input"],
-            output_arrays=["explore_agent/pi_logic_outs", "explore_agent/baseline"]
-            # output_arrays=["explore_agent/baseline"]
-        )
-        # converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        tflite_model = converter.convert()
-        with tf.io.gfile.GFile('/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.tflite', 'wb') as f:
-            f.write(tflite_model)
-        interval_2 = time.time()
-        print("=============================================================")
-        print("freeze graph time: {:.2f}ms\nconvert time: {:.2f}ms".format((interval_1 - start_0) * 1000,
-                                                                           (interval_2 - interval_1) * 1000))
-        print("=============================================================")
+        return out_path
 
     def load_model(self, model_name, by_name=False):
         """Load model with inference variables."""
+
         restore_tf_variable(self.sess, self.explore_paras, model_name)
 
     def set_weights(self, weights):
         """Set weight with memory tensor."""
-        with self.graph.as_default():
-            order = weights["order"]
-            logging.info("=====================P {} Use Weight {}========================".format(os.getpid(), order))
-            weights = weights["weight"]
-            self.actor_var.set_weights(weights)
+        # with self.graph.as_default():
+        #     self.actor_var.set_weights(weights)
+        logging.info("====================Create Interpreter for exp======================")
+        self.create_tflite_interpreter(weights)
 
     def get_weights(self):
         """Get weights."""
-        if not hasattr(self, "weight_num"):
-            setattr(self, "weight_num", 0)
+        # with self.graph.as_default():
+        #     return self.actor_var.get_weights()
+        if not hasattr(self, "model_num"):
+            setattr(self, "model_num", 0)
         else:
-            setattr(self, "weight_num", getattr(self, "weight_num") + 1)
-        with self.graph.as_default():
-            # return self.actor_var.get_weights()
-            return {"order": getattr(self, "weight_num"), "weight": self.actor_var.get_weights()}
+            setattr(self, "model_num", (getattr(self, "model_num") + 1) % 20)
+        save_path = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_{}.pb". \
+            format(getattr(self, "model_num"))
+        pb_file = self.freeze_graph(save_path)
+        return pb_file
 
 
 def calc_baseline_loss(advantages):

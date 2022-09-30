@@ -25,6 +25,7 @@ from time import time
 from copy import deepcopy
 from multiprocessing import Queue, Process
 import numpy as np
+import psutil
 from absl import logging
 from collections import deque, defaultdict
 import setproctitle
@@ -265,10 +266,10 @@ class TrainWorker(object):
         # logging.info("==================Start transferring weight to all explorers...===========")
         # compress weight
         # todo: if need_compress_weight
-        need_compress_weight = False
-        if not hasattr(self, "first_transfer"):
-            need_compress_weight = False
-            setattr(self, "first_transfer", False)
+        need_compress_weight = True
+        # if not hasattr(self, "first_transfer"):
+        #     need_compress_weight = False
+            # setattr(self, "first_transfer", False)
         if not need_compress_weight:
             self._dist_policy_(weight, save_index, dist_cmd)
         else:
@@ -280,12 +281,19 @@ class TrainWorker(object):
                 logging.info("Compress Weight Error: raw weight store is full")
                 raise RuntimeError("raw weight store is full")
             else:
-                raw_weight_queue.put(weight)
+                config = {
+                    "pb_file": weight,
+                    "input_names": ["state_input"],
+                    "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
+                    "save_path": weight.replace(".pb", ".tflite")
+                }
+                raw_weight_queue.put(config)
 
-            if not compress_weight_queue.empty():
-                # compress_weight = compress_weight_queue.get()
-                # logging.info()
-                self._dist_policy_(weight, save_index, dist_cmd)
+            if not compress_weight_queue.empty() or (not hasattr(self, "first_commit")):
+                compress_weight = compress_weight_queue.get()
+                logging.info("===================Invoke Compress Weight {}====================".format(compress_weight))
+                self._dist_policy_(compress_weight, save_index, dist_cmd)
+                setattr(self, "first_commit", 0)
 
     def _dist_policy_(self, weight=None, save_index=-1, dist_cmd="explore"):
         """Distribute model tool."""
@@ -337,6 +345,9 @@ class TrainWorker(object):
 
         loss = 0
         while True:
+            # monitor resource
+            resource_monitor()
+
             for _tf_val in range(self.alg.prepare_data_times):
                 # logging.debug("wait data for preparing-{}...".format(_tf_val))
                 with self.logger.wait_sample_timer:
@@ -473,6 +484,18 @@ class TrainWorker(object):
                 self.actor_reward[key] = 0.0
                 self.actor_trajectory[key] = 0
 
+
+# revised by dxa start
+
+def resource_monitor():
+    avail_mem = psutil.virtual_memory().available // (8 * 1000 * 1000)
+    total_mem = psutil.virtual_memory().total // (8 * 1000 * 1000)
+
+    if avail_mem / total_mem < 0.2:
+        raise ResourceWarning("Available mem of server is less than 20% !!!")
+
+
+# revised by dxa end
 
 class PredictThread(object):
     """Predict Worker for async algorithm."""

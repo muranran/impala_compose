@@ -211,7 +211,12 @@ class AgentGroup(object):
 
         for i in range(self.agent_num):
             target_para[i].update(
-                {"vector_env_size": env_info.get("vector_env_size", 1)})
+                # revise by ZZX *begin
+                # {"vector_env_size": env_info.get("vector_env_size", 1)}
+                {"vector_env_size": env_info.get("vector_env_size", 1),
+                 "wait_num": env_info.get("wait_num", env_info.get("vector_env_size", 1))}
+                # revise by ZZX *end
+            )
         return target_para
 
     @staticmethod
@@ -271,7 +276,6 @@ class AgentGroup(object):
         # fixme: remove model name file, and make sense to multi-agent.
         if is_id:
             weights = self.buf_stub.get(weights)
-
             model_weights = {"data": weights}
         else:
             model_weights = {"data": weights}
@@ -282,15 +286,9 @@ class AgentGroup(object):
             # dict, would be useful to multi-agent.
             # bytes, as the weights_id
             # list, as to keras.get_weights
-            if isinstance(weights, (dict, bytes, list)):
-                try:
-                    alg.restore(model_weights=model_weights["data"])
-
-                except:
-                    logging.info("===================================\n"
-                                 "Weight:\n{}\n"
-                                 "===================================".format(list(weights.keys())[:10]))
-                    raise RuntimeError("debug...")
+            if isinstance(weights, (dict, bytes, list, str)):
+                logging.info("====================Restore Model======================")
+                alg.restore(model_weights=model_weights["data"])
                 continue
             elif not model_weights["data"]:  # None, dummy model.
                 # buffer may return weights with None
@@ -437,12 +435,12 @@ class AgentGroup(object):
         # 2) don't restore with special policy, likes IMPALA.
         if model_name:
             _start1 = time()
-            # print("======================YYYYYYYYYY=========================")
             self.restore(model_name)
             self.ag_stats.restore_model_time = time() - _start1
         return type(model_name)
 
-    def explore(self, episode_count):
+    # revised by ZZX: added arguments
+    def explore(self, episode_count, lock=None, gid=-1, eid=-1):
         """
         Explore the environment.
 
@@ -459,7 +457,8 @@ class AgentGroup(object):
         if self.env_info["api_type"] == "standalone":
             # (use_explore, collect)
             _paras = [
-                (True, False if _ag.alg.async_flag else True) for _ag in self.agents
+                # revised by ZZX: added arguments
+                (True, False if _ag.alg.async_flag else True, lock, gid, eid) for _ag in self.agents
             ]
             job_funcs = [agent.run_one_episode for agent in self.agents]
             for _epi_index in range(episode_count):
