@@ -2,6 +2,8 @@ import logging
 import os
 import time
 from multiprocessing import Process, Queue
+
+import google.protobuf.message
 from tensorflow.keras import backend as K
 from tensorflow_core.python.framework import graph_util
 import subprocess
@@ -11,6 +13,8 @@ from tensorflow.compat.v1 import Graph, GraphDef, import_graph_def, Session
 from tensorflow.compat.v1.gfile import GFile
 import tensorflow as tf
 import graph_def_editor as gde
+import re
+from typing import Tuple
 
 os.environ["CUDA_VISIBLE_DEVICES"] = str(-1)
 DEFAULT_TFL_NAME = "model.tflite"
@@ -32,8 +36,17 @@ class CompressWeights:
         while True:
             if not self.raw_weights_queue.empty():
                 raw_weight = self.raw_weights_queue.get()
-                compress_weight = self.compress_tool(raw_weight)
+                try:
+                    compress_weight = self.compress_tool(raw_weight)
+                except google.protobuf.message.DecodeError as err:
+                    print("\"{}\" has been overlaid")
+                    continue
+                except ValueError as err_v:
+                    print(err_v)
+                    continue
                 self.compress_weights_queue.put(compress_weight)
+            # else:
+            #     time.sleep(0.2)
 
     def start(self):
         Process(target=self.task_loop).start()
@@ -132,14 +145,38 @@ def freeze_session(session, keep_var_names=None, output_names=None, clear_device
         return frozen_graph
 
 
+def spilt_path_file(path_like: str) -> Tuple[str, str, str]:
+    pattern1 = r"[/]"
+    pattern2 = r"[.]"
+
+    def find_last(p, s):
+        ret = re.finditer(p, s)
+        split_position = list(ret)[-1].span()[0]
+        return split_position
+
+    sp1 = find_last(pattern1, path_like)
+    path = path_like[:sp1]
+    file = path_like[sp1 + 1:]
+    sp2 = find_last(pattern2, file)
+    file_name = file[:sp2]
+    suffix = file[sp2:]
+    return path, file_name, suffix
+
+
 def save_tflite_as_bolt(config: Dict):
     tflite_to_bolt = config.get("X2bolt")
     tflite_file = config.get("tflite_file")
+    path, file, suffix = spilt_path_file(tflite_file)
 
-    p = subprocess.Popen(
-        '/home/xys/bolt/install_linux-x86_64_avx2/tools/X2bolt -d /home/xys/bolt/test'
-        ' -m ppo_cnn -i FP32', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return "Bolt File"
+    bolt_flag = "FP32"
+    raw_proc_cmd = [tflite_to_bolt, "-d", path, "-m", file, "-i", bolt_flag]
+    p = subprocess.run(raw_proc_cmd, capture_output=True, check=True, encoding="utf-8")
+    # p = subprocess.Popen(
+    #     raw_proc_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    info = p.stdout
+    bolt_path = re.findall("{}.*".format(path), info)[-1][:-1]
+    # print(bolt_path)
+    return bolt_path
 
 
 # config example:
@@ -162,7 +199,20 @@ def exp2_p_f(config: Dict):
 
 
 def exp3_p_f(config: Dict):
+    default_config = {
+        "X2bolt": "/home/data/dxa/bolt/install_linux-x86_64_avx512_vnni/tools/X2bolt",
+    }
     tflite_file = exp2_p_f(config)
     config.update({"tflite_file": tflite_file})
+    config.update(default_config)
     bolt_file = save_tflite_as_bolt(config)
     return bolt_file
+
+
+if __name__ == '__main__':
+    config = {
+        "X2bolt": "/home/data/dxa/bolt/install_linux-x86_64_avx512_vnni/tools/X2bolt",
+        "tflite_file": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_10.tflite",
+    }
+    bolt_path = save_tflite_as_bolt(config)
+    print(bolt_path)

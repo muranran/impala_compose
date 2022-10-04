@@ -73,3 +73,7 @@ class UniComm(object):
                 self.comm.close()
             except AttributeError as err:
                 logging.info("call comm.close failed! with: \n{}".format(err))
+
+    @property
+    def empty(self):
+        return self.comm.empty()

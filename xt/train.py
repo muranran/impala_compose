@@ -38,7 +38,8 @@ from xt.framework.explorer import setup_explorer
 from zeus.common.util.logger import StatsRecorder, VERBOSITY_MAP
 from zeus.common.util.get_xt_config import parse_xt_multi_case_paras, \
     check_if_patch_local_node, get_pbt_set
-from xt.framework.compress_weights import CompressWeights, empty_weights_proc_func, experiment_1_proc_func, exp2_p_f
+from xt.framework.compress_weights import CompressWeights, empty_weights_proc_func, experiment_1_proc_func, exp2_p_f, \
+    exp3_p_f
 from multiprocessing import Process, Queue
 
 TRAIN_PROCESS_LIST = list()
@@ -94,9 +95,17 @@ def _makeup_learner(config_info, data_url, verbosity):
     # start compress weight
     # todo: if need_compress_weight:
     logging.info("========================Compress weight process start=========================")
-    compress_worker = CompressWeights(shared_queue=shared_queue)
-    compress_worker.register_weights_process_function(exp2_p_f)
-    compress_worker.start()
+
+    backend = config_info.get("backend", "tf")
+    if backend != "tf" and backend != "tensorflow":
+        compress_worker = CompressWeights(shared_queue=shared_queue)
+        if backend == "bolt":
+            compress_worker.register_weights_process_function(exp3_p_f)
+        elif backend == "tflite":
+            compress_worker.register_weights_process_function(exp2_p_f)
+        else:
+            raise NotImplementedError("Default option {tf} has not been implemented...")
+        compress_worker.start()
 
     for _learner in controller.tasks:
         _learner.start()

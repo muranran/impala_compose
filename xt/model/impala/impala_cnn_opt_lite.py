@@ -33,6 +33,7 @@ See https://arxiv.org/abs/1802.01561 for the full paper.
 """
 import os
 import re
+import sys
 import time
 
 import numpy as np
@@ -69,6 +70,7 @@ class ImpalaCnnOptLite(XTModel):
     """Docstring for ActorNetwork."""
 
     def __init__(self, model_info):
+        self.inference = None
         self.interpreter = None
         model_config = model_info.get("model_config", dict())
         import_config(globals(), model_config)
@@ -109,6 +111,8 @@ class ImpalaCnnOptLite(XTModel):
         self.saver = None
         self.explore_paras = None
         self.actor_var = None  # store weights for agent
+
+        self.bolt_interpreter = None
 
         super().__init__(model_info)
 
@@ -321,6 +325,7 @@ class ImpalaCnnOptLite(XTModel):
         pass
 
     def predict(self, state):
+
         # logging.info("================{} state shape {}================".format(state[0].shape))
         # interpreter = self.interpreter["interpreter"]
         state = [s.astype(np.float32) for s in state]
@@ -341,7 +346,7 @@ class ImpalaCnnOptLite(XTModel):
             baseline = []
             for s in state_batch_resize:
                 try:
-                    p, b = self.invoke(s)
+                    p, b = self.inference(s)
                     pi_logic_outs.extend(p)
                     baseline.extend(b)
                 except ValueError as err:
@@ -351,15 +356,26 @@ class ImpalaCnnOptLite(XTModel):
             baseline = baseline[:real_batch_size]
             # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
         elif real_batch_size == batch_size:
-            pi_logic_outs, baseline = self.invoke(state)
+            pi_logic_outs, baseline = self.inference(state)
         else:
             raise NotImplementedError("state_batch_size < inference_batch_size | {} < {}"
                                       .format(real_batch_size, batch_size))
 
-        # raise RuntimeError("debug...input shape {} ".format(self.interpreter["input_shape"]))
-        actions = tf.squeeze(tf.multinomial(pi_logic_outs, num_samples=1, output_dtype=tf.int32))\
-            .eval(session=tf.Session())
-        # raise RuntimeError("debug...actions {} ".format(actions))
+        t0 = time.time()
+
+        def softmax(logits):
+            e_x = np.exp(logits)
+            probs = e_x / np.sum(e_x, axis=-1, keepdims=True)
+            return probs
+
+        try:
+            actions = np.asarray([np.argmax(np.random.multinomial(1, softmax(plo))) for plo in pi_logic_outs])
+        except ValueError as err:
+            print("pi_logic_outs:\n{}\nmay contains negative.{}".format(pi_logic_outs, err))
+            actions = np.random.randint(0, 4, (len(pi_logic_outs),))
+            pi_logic_outs = np.zeros(shape=np.asarray(pi_logic_outs).shape)
+        at = time.time() - t0
+        # print("====================Action Time : {:.2f}=========================".format(at * 1000))
         return pi_logic_outs, baseline, actions
 
     def create_tflite_interpreter(self, tflite_model_path):
@@ -385,6 +401,25 @@ class ImpalaCnnOptLite(XTModel):
             "baseline_index": output_details[1]['index'],
         }
 
+    def create_bolt_interpreter(self, bolt_model_path):
+        # Load the bolt model and allocate tensors.
+        module_path = "/home/data/cypo/bolt"
+        try:
+            sys.path.append(module_path)
+            import batch_infer as bolt
+        except ModuleNotFoundError as err:
+            raise ModuleNotFoundError("bolt module not found under path:{}".format(module_path))
+        bolt_interpreter = bolt.Dog.get_instance()
+        bolt_interpreter.prepare(bolt_model_path)
+
+        # update interpreter info
+        self.interpreter = {
+            "interpreter": bolt_interpreter,
+            "input_shape": (3, 4, 84, 84),
+            "pi_logic_outs_index": 1,
+            "baseline_index": 0,
+        }
+
     def invoke(self, state):
         input_data = state
         interpreter = self.interpreter["interpreter"]
@@ -392,8 +427,14 @@ class ImpalaCnnOptLite(XTModel):
         interpreter.invoke()
         pi_logic_outs = interpreter.get_tensor(self.interpreter["pi_logic_outs_index"])
         baseline = interpreter.get_tensor(self.interpreter["baseline_index"])
-        # raise RuntimeError("debug...type: {} {}".format(type(pi_logic_outs), type(baseline)))
-        # a = np.array([])
+        return pi_logic_outs.tolist(), baseline.tolist()
+
+    def invoke_bolt(self, state):
+        input_data = np.expand_dims(np.transpose(np.array(state), (0, 3, 1, 2)).flatten(), 1)
+        interpreter = self.interpreter["interpreter"]
+        interpreter.inference(input_data)
+        pi_logic_outs = interpreter.get_result(self.interpreter["pi_logic_outs_index"])
+        baseline = interpreter.get_result(self.interpreter["baseline_index"])
         return pi_logic_outs.tolist(), baseline.tolist()
 
     def freeze_graph(self, save_path: str) -> str:
@@ -511,11 +552,24 @@ class ImpalaCnnOptLite(XTModel):
         restore_tf_variable(self.sess, self.explore_paras, model_name)
 
     def set_weights(self, weights):
+        if isinstance(weights, str):
+            if weights.endswith(".bolt"):
+                self.inference = self.invoke_bolt
+                self.set_bolt_weight(weights)
+            else:
+                self.inference = self.invoke
+                self.set_tflite_weights(weights)
+
+    def set_tflite_weights(self, weights):
         """Set weight with memory tensor."""
         # with self.graph.as_default():
         #     self.actor_var.set_weights(weights)
-        logging.info("====================Create Interpreter for exp======================")
+        logging.info("====================Create TFLite Interpreter======================")
         self.create_tflite_interpreter(weights)
+
+    def set_bolt_weight(self, weights):
+        logging.info("====================Create Bolt Interpreter======================")
+        self.create_bolt_interpreter(weights)
 
     def get_weights(self):
         """Get weights."""
@@ -524,7 +578,7 @@ class ImpalaCnnOptLite(XTModel):
         if not hasattr(self, "model_num"):
             setattr(self, "model_num", 0)
         else:
-            setattr(self, "model_num", (getattr(self, "model_num") + 1) % 20)
+            setattr(self, "model_num", (getattr(self, "model_num") + 1) % 15)
         save_path = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_{}.pb". \
             format(getattr(self, "model_num"))
         pb_file = self.freeze_graph(save_path)

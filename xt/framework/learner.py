@@ -269,7 +269,7 @@ class TrainWorker(object):
         need_compress_weight = True
         # if not hasattr(self, "first_transfer"):
         #     need_compress_weight = False
-            # setattr(self, "first_transfer", False)
+        # setattr(self, "first_transfer", False)
         if not need_compress_weight:
             self._dist_policy_(weight, save_index, dist_cmd)
         else:
@@ -347,7 +347,6 @@ class TrainWorker(object):
         while True:
             # monitor resource
             resource_monitor()
-
             for _tf_val in range(self.alg.prepare_data_times):
                 # logging.debug("wait data for preparing-{}...".format(_tf_val))
                 with self.logger.wait_sample_timer:

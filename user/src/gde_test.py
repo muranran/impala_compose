@@ -1,3 +1,5 @@
+import time
+
 import graph_def_editor as gde
 import numpy as np
 from tensorflow.compat.v1 import Graph, GraphDef, import_graph_def, Session
@@ -122,7 +124,54 @@ def cal_actions():
     print(result)
 
 
+def categorical_sample(self, logits):
+    self.probs = self.softmax(logits)
+    a = [i for i in range(len(logits[0]))]
+    action_index = np.random.choice(a, p=self.probs[0])
+    return action_index
+
+
+def get_action(self, pi_latent):
+    action = self.categorical_sample(pi_latent)
+    np_logp = self.log_prob_np(action)
+    action = np.expand_dims(action, axis=0)
+    np_logp = np.expand_dims(np_logp, axis=0)
+    np_logp = np.expand_dims(np_logp, axis=0)
+    return action, np_logp
+
+
+def softmax(self, logits):
+    e_x = np.exp(logits)
+    probs = e_x / np.sum(e_x, axis=-1, keepdims=True)
+    return probs
+
+
+def cal_actions_with_np():
+    pi_logic_outs = []
+    for i in range(5):
+        pi_logic_outs.append([0.1, 0.2, 0.3, 0.4])
+    pi_logic_outs = np.array(pi_logic_outs)
+
+    # pi_logic_outs = [[8.22197151184082, -198.59768676757812, 1084.2288818359375, -1870.9298095703125],
+    #                  [5.455597400665283, -200.9584197998047, 1102.4227294921875, -1896.616455078125],
+    #                  [3.170361280441284, -201.0675506591797, 1085.162353515625, -1859.453857421875]]
+
+    # actions = tf.squeeze(tf.multinomial(pi_logic_outs, num_samples=1, output_dtype=tf.int32))
+    # result = actions.eval(session=tf.compat.v1.Session())
+    def softmax(logits):
+        e_x = np.exp(logits)
+        probs = e_x / np.sum(e_x, axis=-1, keepdims=True)
+        return probs
+
+    t0 = time.time()
+    print([softmax(plo) for plo in pi_logic_outs])
+    actions = np.array([np.argmax(np.random.multinomial(1, softmax(plo))) for plo in pi_logic_outs])
+    # actions = np.random.multinomial(1, pi_logic_outs[0])
+    t = time.time() - t0
+    print(actions, "{:.2f}ms".format(t * 1000))
+
+
 if __name__ == '__main__':
     # main()
     # resize_shape_test()
-    cal_actions()
+    cal_actions_with_np()

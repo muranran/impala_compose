@@ -1,0 +1,2 @@
+example: test.cpp
+	c++ -O3 -Wall -shared -fPIC $(python3 -m pybind11 --includes) test.cpp ./install_linux-x86_64_avx512_vnni/lib/libbolt.a -I ./install_linux-x86_64_avx512_vnni/include  -lm -lstdc++ -o example$(python3-config --extension-suffix)

@@ -51,3 +51,6 @@ class LocalMsg(object):
             data = self.data_list.pop(0)
 
         return data
+
+    def empty(self):
+        return self.cmd_q.empty()

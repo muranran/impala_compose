@@ -541,9 +541,9 @@ class Broker(object):
             group_num = config_info.get("group_num", 1)
 
             # lock
-            if lock_val == 1:
+            if lock_val == 1 and self.lock is None:
                 self.lock = [multiprocessing.Lock() for _ in range(group_num)]
-            elif lock_val > 1:
+            elif lock_val > 1 and self.lock is None:
                 self.lock = [multiprocessing.Semaphore(lock_val) for _ in range(group_num)]
 
             env_id = env_id
