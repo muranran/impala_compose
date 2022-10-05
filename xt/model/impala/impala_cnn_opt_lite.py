@@ -303,27 +303,6 @@ class ImpalaCnnOptLite(XTModel):
         ck_name = self.saver.save(self.sess, save_path=file_name, write_meta_graph=False)
         return ck_name
 
-    # rbd model save h5 test
-    def save_keras_weight(self, file_name):
-        pass
-
-    def save_lite_model(self, file_name=None):
-        # default
-        if file_name is None:
-            file_name = '/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.tflite'
-        # with tf.Session(graph=self.graph).as_default() as sess:
-        converter = tf.lite.TFLiteConverter.from_session(self.sess,
-                                                         [self.ph_state],
-                                                         [self.pi_logic_outs, self.baseline])
-        tflite_model = converter.convert()
-        # with tf.io.gfile.GFile(file_name, 'wb') as f:
-        #     f.write(tflite_model)
-
-        pass
-
-    def load_lite_model(self):
-        pass
-
     def predict(self, state):
 
         # logging.info("================{} state shape {}================".format(state[0].shape))
@@ -346,7 +325,17 @@ class ImpalaCnnOptLite(XTModel):
             baseline = []
             for s in state_batch_resize:
                 try:
-                    p, b = self.inference(s)
+                    pb, bb = self.inference(s)
+                    pt, bt = self.invoke(s)
+                    logging.info("======================================\n"
+                                 "tflite result:\n{}\n"
+                                 "bolt result:\n{}\n"
+                                 "======================================\n"
+                                 .format((pt, bt), (pb, bb)))
+
+                    p = pt
+                    b = bt
+
                     pi_logic_outs.extend(p)
                     baseline.extend(b)
                 except ValueError as err:
@@ -357,6 +346,15 @@ class ImpalaCnnOptLite(XTModel):
             # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
         elif real_batch_size == batch_size:
             pi_logic_outs, baseline = self.inference(state)
+            pt, bt = self.invoke(state)
+            # logging.info("======================================\n"
+            #              "tflite result:\n{}\n"
+            #              "bolt result:\n{}\n"
+            #              "======================================\n"
+            #              .format((pt, bt), (pi_logic_outs, baseline)))
+
+            # pi_logic_outs = pt
+            # baseline = bt
         else:
             raise NotImplementedError("state_batch_size < inference_batch_size | {} < {}"
                                       .format(real_batch_size, batch_size))
@@ -393,7 +391,7 @@ class ImpalaCnnOptLite(XTModel):
         # raise RuntimeError("debug...")
 
         # update interpreter info
-        self.interpreter = {
+        self.tflite_interpreter = {
             "interpreter": interpreter,
             "input_index": input_details[0]['index'],
             "input_shape": input_shape,
@@ -413,7 +411,7 @@ class ImpalaCnnOptLite(XTModel):
         bolt_interpreter.prepare(bolt_model_path)
 
         # update interpreter info
-        self.interpreter = {
+        self.bolt_interpreter = {
             "interpreter": bolt_interpreter,
             "input_shape": (3, 4, 84, 84),
             "pi_logic_outs_index": 1,
@@ -422,19 +420,19 @@ class ImpalaCnnOptLite(XTModel):
 
     def invoke(self, state):
         input_data = state
-        interpreter = self.interpreter["interpreter"]
-        interpreter.set_tensor(self.interpreter["input_index"], input_data)
+        interpreter = self.tflite_interpreter["interpreter"]
+        interpreter.set_tensor(self.tflite_interpreter["input_index"], input_data)
         interpreter.invoke()
-        pi_logic_outs = interpreter.get_tensor(self.interpreter["pi_logic_outs_index"])
-        baseline = interpreter.get_tensor(self.interpreter["baseline_index"])
+        pi_logic_outs = interpreter.get_tensor(self.tflite_interpreter["pi_logic_outs_index"])
+        baseline = interpreter.get_tensor(self.tflite_interpreter["baseline_index"])
         return pi_logic_outs.tolist(), baseline.tolist()
 
     def invoke_bolt(self, state):
         input_data = np.expand_dims(np.transpose(np.array(state), (0, 3, 1, 2)).flatten(), 1)
-        interpreter = self.interpreter["interpreter"]
+        interpreter = self.bolt_interpreter["interpreter"]
         interpreter.inference(input_data)
-        pi_logic_outs = interpreter.get_result(self.interpreter["pi_logic_outs_index"])
-        baseline = interpreter.get_result(self.interpreter["baseline_index"])
+        pi_logic_outs = interpreter.get_result(self.bolt_interpreter["pi_logic_outs_index"])
+        baseline = interpreter.get_result(self.bolt_interpreter["baseline_index"])
         return pi_logic_outs.tolist(), baseline.tolist()
 
     def freeze_graph(self, save_path: str) -> str:
@@ -556,9 +554,15 @@ class ImpalaCnnOptLite(XTModel):
             if weights.endswith(".bolt"):
                 self.inference = self.invoke_bolt
                 self.set_bolt_weight(weights)
+                self.interpreter = self.bolt_interpreter
+                # test output of bolt EXP4
+                tflite_weights = weights.replace("_f32.bolt", ".tflite")
+                self.set_tflite_weights(tflite_weights)
+
             else:
                 self.inference = self.invoke
                 self.set_tflite_weights(weights)
+                self.interpreter = self.bolt_interpreter
 
     def set_tflite_weights(self, weights):
         """Set weight with memory tensor."""

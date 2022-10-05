@@ -17,7 +17,7 @@ env_para:
 env_num: 3
 group_num: 1
 speedup: 3
-backend: tflite
+backend: bolt
 
 
 agent_para:

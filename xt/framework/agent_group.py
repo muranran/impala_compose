@@ -287,7 +287,7 @@ class AgentGroup(object):
             # bytes, as the weights_id
             # list, as to keras.get_weights
             if isinstance(weights, (dict, bytes, list, str)):
-                logging.info("====================Restore Model======================")
+                # logging.info("====================Restore Model======================")
                 alg.restore(model_weights=model_weights["data"])
                 continue
             elif not model_weights["data"]:  # None, dummy model.

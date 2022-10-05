@@ -94,10 +94,10 @@ def _makeup_learner(config_info, data_url, verbosity):
 
     # start compress weight
     # todo: if need_compress_weight:
-    logging.info("========================Compress weight process start=========================")
 
     backend = config_info.get("backend", "tf")
     if backend != "tf" and backend != "tensorflow":
+
         compress_worker = CompressWeights(shared_queue=shared_queue)
         if backend == "bolt":
             compress_worker.register_weights_process_function(exp3_p_f)
@@ -105,6 +105,8 @@ def _makeup_learner(config_info, data_url, verbosity):
             compress_worker.register_weights_process_function(exp2_p_f)
         else:
             raise NotImplementedError("Default option {tf} has not been implemented...")
+
+        logging.info("========================Compress weight process start=========================")
         compress_worker.start()
 
     for _learner in controller.tasks:

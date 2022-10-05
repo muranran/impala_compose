@@ -33,7 +33,7 @@ model_para:
       sample_batch_step: 128
       grad_norm_clip: 40.0
 
-env_num: 10
+env_num: 5
 speedup: True
 benchmark:
   archive_root: ./logs

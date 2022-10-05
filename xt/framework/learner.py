@@ -266,7 +266,10 @@ class TrainWorker(object):
         # logging.info("==================Start transferring weight to all explorers...===========")
         # compress weight
         # todo: if need_compress_weight
-        need_compress_weight = True
+        if isinstance(weight, str):
+            need_compress_weight = True
+        else:
+            need_compress_weight = False
         # if not hasattr(self, "first_transfer"):
         #     need_compress_weight = False
         # setattr(self, "first_transfer", False)

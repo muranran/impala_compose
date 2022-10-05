@@ -37,7 +37,13 @@ class CompressWeights:
             if not self.raw_weights_queue.empty():
                 raw_weight = self.raw_weights_queue.get()
                 try:
+                    start_0 = time.time()
                     compress_weight = self.compress_tool(raw_weight)
+                    compress_time = time.time() - start_0
+                    logging.info("==================================\n"
+                                 "Compress Time: {:.2f} ms\n"
+                                 "==================================\n"
+                                 .format(compress_time*1000))
                 except google.protobuf.message.DecodeError as err:
                     print("\"{}\" has been overlaid")
                     continue
