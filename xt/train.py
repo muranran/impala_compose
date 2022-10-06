@@ -107,7 +107,8 @@ def _makeup_learner(config_info, data_url, verbosity):
             raise NotImplementedError("Default option {tf} has not been implemented...")
 
         logging.info("========================Compress weight process start=========================")
-        compress_worker.start()
+        # compress_worker.start()
+        compress_worker.start_multi_task()
 
     for _learner in controller.tasks:
         _learner.start()

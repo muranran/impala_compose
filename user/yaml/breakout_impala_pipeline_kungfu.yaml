@@ -24,7 +24,7 @@ agent_para:
   agent_name: AtariImpalaOpt
   agent_num : 1
   agent_config:
-    max_steps: 640
+    max_steps: 320
     complete_step: 10020000
 
 model_para:
