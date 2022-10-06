@@ -262,6 +262,13 @@ class ImpalaCnnOptLite(XTModel):
     def train(self, state, label):
         """Train with sess.run."""
         bp_logic_outs, actions, dones, rewards = label
+
+        # print(
+        #     "shape:{}-{}-{}-{}-{}".format(state.shape, bp_logic_outs.shape, actions.shape, dones.shape, rewards.shape))
+        # raise RuntimeError(
+        #     "shape {}:{}-{}-{}-{}-{}".format(self.sample_batch_steps, state.shape, bp_logic_outs.shape, actions.shape,
+        #                                      dones.shape, rewards.shape))
+
         with self.graph.as_default():
             _, loss = self.sess.run(
                 [self.train_op, self.loss],
@@ -325,17 +332,16 @@ class ImpalaCnnOptLite(XTModel):
             baseline = []
             for s in state_batch_resize:
                 try:
-                    pb, bb = self.inference(s)
-                    pt, bt = self.invoke(s)
-                    logging.info("======================================\n"
-                                 "tflite result:\n{}\n"
-                                 "bolt result:\n{}\n"
-                                 "======================================\n"
-                                 .format((pt, bt), (pb, bb)))
-
-                    p = pt
-                    b = bt
-
+                    p, b = self.inference(s)
+                    # pt, bt = self.invoke(s)
+                    # logging.info("======================================\n"
+                    #              "tflite result:\n{}\n"
+                    #              "bolt result:\n{}\n"
+                    #              "======================================\n"
+                    #              .format((pt, bt), (pb, bb)))
+                    #
+                    # p = pt
+                    # b = bt
                     pi_logic_outs.extend(p)
                     baseline.extend(b)
                 except ValueError as err:
@@ -346,7 +352,7 @@ class ImpalaCnnOptLite(XTModel):
             # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
         elif real_batch_size == batch_size:
             pi_logic_outs, baseline = self.inference(state)
-            pt, bt = self.invoke(state)
+            # pt, bt = self.invoke(state)
             # logging.info("======================================\n"
             #              "tflite result:\n{}\n"
             #              "bolt result:\n{}\n"
@@ -433,6 +439,9 @@ class ImpalaCnnOptLite(XTModel):
         interpreter.inference(input_data)
         pi_logic_outs = interpreter.get_result(self.bolt_interpreter["pi_logic_outs_index"])
         baseline = interpreter.get_result(self.bolt_interpreter["baseline_index"])
+
+        # time.sleep(0.002)
+
         return pi_logic_outs.tolist(), baseline.tolist()
 
     def freeze_graph(self, save_path: str) -> str:
@@ -555,9 +564,9 @@ class ImpalaCnnOptLite(XTModel):
                 self.inference = self.invoke_bolt
                 self.set_bolt_weight(weights)
                 self.interpreter = self.bolt_interpreter
-                # test output of bolt EXP4
-                tflite_weights = weights.replace("_f32.bolt", ".tflite")
-                self.set_tflite_weights(tflite_weights)
+                # # test output of bolt EXP4
+                # tflite_weights = weights.replace("_f32.bolt", ".tflite")
+                # self.set_tflite_weights(tflite_weights)
 
             else:
                 self.inference = self.invoke

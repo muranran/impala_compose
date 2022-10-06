@@ -192,63 +192,64 @@ def create_trainer(trainer_id, model_info, device_id):
     return trainer.request_q
 
 
-def send_train_data(state, label, gpu_nums, trainer_q):
-    # 发送给model训练的数据到request_q
-    # print("state.shape = ============================", state.shape)
-    # impala 需要state.shape[0] // gpu_nums state.shape = (1280, 84, 84, 48)
-    # ppo 需要state[0].shape[0] // gpu_nums state[0].shape = (1280, 84, 84, 48)
-    # print("state.shape ============== {}".format(state.shape))
-    shape_split = state[0].shape[0] // gpu_nums  # 数据个数1280
-    state_split = [[] for i in range(gpu_nums)]
-    label_split = [[] for i in range(gpu_nums)]
-
-    for j in range(gpu_nums):
-        for i in range(len(state)):
-            # state[i]
-            input_split = state[i][j * shape_split: (j + 1) * shape_split]
-            state_split[j].append(input_split)
-
-        for i in range(len(label)):
-            input_split = label[i][j * shape_split: (j + 1) * shape_split]
-            label_split[j].append(input_split)
-
-    for j in range(gpu_nums - 1):
-        train_data = {'state': state_split[j + 1], 'label': label_split[j + 1]}
-        train_msg = message(train_data, cmd="trainer")
-        trainer_q[j].send(train_msg)
-
-    return state_split[0], label_split[0]
-
 # def send_train_data(state, label, gpu_nums, trainer_q):
 #     # 发送给model训练的数据到request_q
+#     # print("state.shape = ============================", state.shape)
 #     # impala 需要state.shape[0] // gpu_nums state.shape = (1280, 84, 84, 48)
 #     # ppo 需要state[0].shape[0] // gpu_nums state[0].shape = (1280, 84, 84, 48)
-#     # state = [state]
-#     # label = [label]
-#     shape_split = state.shape[0] // gpu_nums  # 数据个数1280
+#     # print("state.shape ============== {}".format(state.shape))
+#     shape_split = state[0].shape[0] // gpu_nums  # 数据个数1280
+#
 #     state_split = [[] for i in range(gpu_nums)]
 #     label_split = [[] for i in range(gpu_nums)]
 #
 #     for j in range(gpu_nums):
 #         for i in range(len(state)):
 #             # state[i]
-#             input_split = state[j * shape_split: (j + 1) * shape_split]
+#             input_split = state[i][j * shape_split: (j + 1) * shape_split]
 #             state_split[j].append(input_split)
 #
 #         for i in range(len(label)):
 #             input_split = label[i][j * shape_split: (j + 1) * shape_split]
 #             label_split[j].append(input_split)
 #
-#
-#
 #     for j in range(gpu_nums - 1):
-#         train_data = {'state': state_split[j + 1][0], 'label': label_split[j + 1]}
-#         # print("state.length =========== {}".format(len(state_split[j + 1])))
-#         # print("state.shape =========== {}".format(state_split[j + 1][0].shape))
+#         train_data = {'state': state_split[j + 1], 'label': label_split[j + 1]}
 #         train_msg = message(train_data, cmd="trainer")
 #         trainer_q[j].send(train_msg)
 #
-#     return state_split[0][0], label_split[0]
+#     return state_split[0], label_split[0]
+
+def send_train_data(state, label, gpu_nums, trainer_q):
+    # 发送给model训练的数据到request_q
+    # impala 需要state.shape[0] // gpu_nums state.shape = (1280, 84, 84, 48)
+    # ppo 需要state[0].shape[0] // gpu_nums state[0].shape = (1280, 84, 84, 48)
+    # state = [state]
+    # label = [label]
+    shape_split = state.shape[0] // gpu_nums  # 数据个数1280
+    state_split = [[] for i in range(gpu_nums)]
+    label_split = [[] for i in range(gpu_nums)]
+
+    for j in range(gpu_nums):
+        for i in range(len(state)):
+            # state[i]
+            input_split = state[j * shape_split: (j + 1) * shape_split]
+            state_split[j].append(input_split)
+
+        for i in range(len(label)):
+            input_split = label[i][j * shape_split: (j + 1) * shape_split]
+            label_split[j].append(input_split)
+
+
+
+    for j in range(gpu_nums - 1):
+        train_data = {'state': state_split[j + 1][0], 'label': label_split[j + 1]}
+        # print("state.length =========== {}".format(len(state_split[j + 1])))
+        # print("state.shape =========== {}".format(state_split[j + 1][0].shape))
+        train_msg = message(train_data, cmd="trainer")
+        trainer_q[j].send(train_msg)
+
+    return state_split[0][0], label_split[0]
 
 def syn_init_model(sess):
     from kungfu.tensorflow.initializer import BroadcastGlobalVariablesOp

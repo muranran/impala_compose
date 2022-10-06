@@ -88,6 +88,11 @@ class Predictor(object):
         os.environ["CUDA_VISIBLE_DEVICES"] = str(-1)
         alg_para = self.config_info.get('alg_para')
         setproctitle.setproctitle("xt_predictor")
+        # zzh 修改predictor ==========
+        model_info = alg_para.get('model_info', {})
+        actor = model_info.get('actor', {})
+        actor['type'] = 'predictor'
+        model_info["type"] = "predictor"
 
         self.alg = alg_builder(**alg_para)
 
