@@ -1,7 +1,8 @@
 import tensorflow as tf
 import os
 import numpy as np
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 
 def main():
@@ -14,8 +15,8 @@ def main():
     #     gpu_c = tf.matmul(gpu_a, gpu_b)
     graph = tf.Graph()
     with graph.as_default():
-        a = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="a")
-        b = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="b")
+        a = tf.placeholder(dtype=tf.uint8, shape=(None, 4), name="a")
+        b = tf.placeholder(dtype=tf.uint8, shape=(None, 4), name="b")
         c = a + b
 
     in1 = np.random.randn(4, 4).astype(np.float32)
@@ -24,7 +25,19 @@ def main():
     with tf.Session(graph=graph).as_default() as sess:
 
         res = sess.run([c], feed_dict={"a:0": in1, "b:0": in2})
-        print(res)
+        # print(res)
+
+        for node in sess.graph_def.node:
+            print(node)
+            if 'GatherTree' in node.name:
+                print(node)
+                # for i, inp in enumerate(node.input):
+                #     if 'Select' in inp:
+                #         p = node.input.pop(i)
+                #     node.input.append('MaxSequenceLength')
+                #     node.input.append('EndToken')
+                # else:
+                #     pass
 
 
 if __name__ == '__main__':

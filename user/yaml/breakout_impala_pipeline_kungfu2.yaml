@@ -14,8 +14,8 @@ env_para:
     size: 5
     wait_num: 3
 
-env_num: 3
-group_num: 1
+env_num: 12
+group_num: 4
 speedup: 3
 compress: True
 
@@ -24,14 +24,14 @@ agent_para:
   agent_name: AtariImpalaOpt
   agent_num : 1
   agent_config:
-    max_steps: 320
+    max_steps: 160
     complete_step: 10020000
 
 model_para:
   actor:
     model_name: ImpalaCnnOptLite
     state_dim: [84,84,4]
-    input_dtype: float # default is uint8
+    input_dtype: uint8 # default is uint8
     state_mean: 0.0
     state_std: 255.0
     action_dim: 4
@@ -40,12 +40,12 @@ model_para:
       sample_batch_step: 160
       grad_norm_clip: 40.0
 
-      gpu_nums: 1
-    gpu_config:
-      cluster:
-        peers:
-      self:
-        rank:
+#      gpu_nums: 1
+#    gpu_config:
+#      cluster:
+#        peers:
+#      self:
+#        rank:
     backend: tf
 
 benchmark:

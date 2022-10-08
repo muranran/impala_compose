@@ -34,6 +34,8 @@ from xt.environment import env_builder
 from xt.framework.trainer import build_alg_with_trainer
 from xt.framework.predictor import Predictor
 from xt.algorithm.pbt import PbtAid
+from xt.manager.tools.resource_manager import resource_monitor
+
 from zeus.visual.tensorboarder import SummaryBoard
 from zeus.common.util.evaluate_xt import make_workspace_if_not_exist, parse_benchmark_args
 from zeus.common.ipc.uni_comm import UniComm
@@ -488,18 +490,6 @@ class TrainWorker(object):
                 self.actor_reward[key] = 0.0
                 self.actor_trajectory[key] = 0
 
-
-# revised by dxa start
-
-def resource_monitor():
-    avail_mem = psutil.virtual_memory().available // (8 * 1000 * 1000)
-    total_mem = psutil.virtual_memory().total // (8 * 1000 * 1000)
-
-    if avail_mem / total_mem < 0.2:
-        raise ResourceWarning("Available mem of server is less than 20% !!!")
-
-
-# revised by dxa end
 
 class PredictThread(object):
     """Predict Worker for async algorithm."""
