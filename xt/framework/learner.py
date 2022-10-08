@@ -99,6 +99,7 @@ class Learner(object):
 
         # compress weight comm
         self.shared_queue = kwargs.get("shared_queue", None)
+        self.compress = kwargs.get("compress", False)
 
         # For Cloud
         self.s3_path = None
@@ -169,6 +170,7 @@ class Learner(object):
             log_interval=self._log_interval,
             name=self._name,
             shared_queue=self.shared_queue,
+            compress=self.compress
         )
         self.train_worker.explorer_ids = self.explorer_ids
         self.train_worker.pbt_aid = self._pbt_aid
@@ -249,6 +251,7 @@ class TrainWorker(object):
 
         # compress weight comm
         self.shared_queue = kwargs.get("shared_queue", None)
+        self.compress = kwargs.get("compress", False)
 
     @property
     def explorer_ids(self):
@@ -267,17 +270,9 @@ class TrainWorker(object):
         self._pbt_aid = val
 
     def _dist_policy(self, weight=None, save_index=-1, dist_cmd="explore"):
-        # logging.info("==================Start transferring weight to all explorers...===========")
         # compress weight
         # todo: if need_compress_weight
-        if isinstance(weight, str):
-            need_compress_weight = True
-        else:
-            need_compress_weight = False
-        # if not hasattr(self, "first_transfer"):
-        #     need_compress_weight = False
-        # setattr(self, "first_transfer", False)
-        if not need_compress_weight:
+        if not self.compress:
             self._dist_policy_(weight, save_index, dist_cmd)
         else:
             raw_weight_queue = self.shared_queue[0]  # type:Queue
@@ -602,6 +597,7 @@ def setup_learner(config, eval_adapter, learner_index, data_url=None, **kwargs):
 
     # compress comm
     shared_queue = kwargs.get("shared_queue", None)
+    compress = kwargs.get("compress", None)
 
     learner = Learner(
         alg_para,
@@ -611,7 +607,8 @@ def setup_learner(config, eval_adapter, learner_index, data_url=None, **kwargs):
         data_url=data_url,
         benchmark_info=bm_info,
         name="T{}".format(learner_index),
-        shared_queue=shared_queue
+        shared_queue=shared_queue,
+        compress=compress,
     )
 
     learner.config_info = config

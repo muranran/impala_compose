@@ -65,10 +65,16 @@ def _makeup_learner(config_info, data_url, verbosity):
         metric_store, weights_store = None, None
 
     # compress weight comm
-    shared_queue = [Queue(), Queue()]
+    backend = config_info.get("model_para", {}).get("actor", {}).get("backend", "tf")
+    need_compress = config_info.get("compress", False)
+    if need_compress:
+        shared_queue = [Queue(), Queue()]
+    else:
+        shared_queue = None
 
     for _learner_id in range(pbt_size):
-        learner = setup_learner(config_info, eval_adapter, _learner_id, data_url, shared_queue=shared_queue)
+        learner = setup_learner(config_info, eval_adapter, _learner_id, data_url,
+                                shared_queue=shared_queue, compress=need_compress)
 
         controller.register("predict{}".format(learner.name), "send", learner.send_predict)
         learner.send_train = controller.register("train{}".format(learner.name), "send")
@@ -95,8 +101,6 @@ def _makeup_learner(config_info, data_url, verbosity):
     # start compress weight
     # todo: if need_compress_weight:
 
-    backend = config_info.get("model_para", {}).get("actor", {}).get("backend", "tf")
-    need_compress = config_info.get("compress", False)
     if need_compress:
 
         compress_worker = CompressWeights(shared_queue=shared_queue)
