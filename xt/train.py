@@ -41,7 +41,7 @@ from zeus.common.util.get_xt_config import parse_xt_multi_case_paras, \
 from xt.framework.compress_weights import CompressWeights, empty_weights_proc_func, experiment_1_proc_func, exp2_p_f, \
     exp3_p_f
 from multiprocessing import Process, Queue
-
+# os.environ["CUDA_VISIBLE_DEVICES"] = str(0)
 TRAIN_PROCESS_LIST = list()
 
 
@@ -95,14 +95,17 @@ def _makeup_learner(config_info, data_url, verbosity):
     # start compress weight
     # todo: if need_compress_weight:
 
-    backend = config_info.get("backend", "tf")
-    if backend != "tf" and backend != "tensorflow":
+    backend = config_info.get("model_para", {}).get("actor", {}).get("backend", "tf")
+    need_compress = config_info.get("compress", False)
+    if need_compress:
 
         compress_worker = CompressWeights(shared_queue=shared_queue)
         if backend == "bolt":
             compress_worker.register_weights_process_function(exp3_p_f)
         elif backend == "tflite":
             compress_worker.register_weights_process_function(exp2_p_f)
+        elif backend == "tf":
+            compress_worker.register_weights_process_function(experiment_1_proc_func)
         else:
             raise NotImplementedError("Default option {tf} has not been implemented...")
 

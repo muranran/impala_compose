@@ -152,7 +152,7 @@ def empty_weights_proc_func(weights):
 
 def experiment_1_proc_func(weight):
     logging.info("===================Compress Weight=====================")
-    time.sleep(3)
+    # sleep(3)
     return weight
 
 

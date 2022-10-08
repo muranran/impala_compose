@@ -190,6 +190,8 @@ class Learner(object):
 
     def main_loop(self):
         """Run with while True, cover the working loop."""
+        # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
         self.train_worker.train()
         # user operation after train process
 

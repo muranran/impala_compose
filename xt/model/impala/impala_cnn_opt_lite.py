@@ -65,6 +65,9 @@ from tensorflow_core.python.framework import graph_util
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+
 @Registers.model
 class ImpalaCnnOptLite(XTModel):
     """Docstring for ActorNetwork."""
@@ -113,6 +116,7 @@ class ImpalaCnnOptLite(XTModel):
         self.actor_var = None  # store weights for agent
 
         self.bolt_interpreter = None
+        self.backend = model_info.get("backend", "tf")
 
         super().__init__(model_info)
 
@@ -311,9 +315,9 @@ class ImpalaCnnOptLite(XTModel):
         return ck_name
 
     def predict(self, state):
+        if self.backend == "tf" or self.backend == "tensorflow":
+            return self.predict_(state)
 
-        # logging.info("================{} state shape {}================".format(state[0].shape))
-        # interpreter = self.interpreter["interpreter"]
         state = [s.astype(np.float32) for s in state]
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
@@ -424,7 +428,7 @@ class ImpalaCnnOptLite(XTModel):
             "baseline_index": 0,
         }
 
-    def invoke(self, state):
+    def invoke_tflite(self, state):
         input_data = state
         interpreter = self.tflite_interpreter["interpreter"]
         interpreter.set_tensor(self.tflite_interpreter["input_index"], input_data)
@@ -559,24 +563,35 @@ class ImpalaCnnOptLite(XTModel):
         restore_tf_variable(self.sess, self.explore_paras, model_name)
 
     def set_weights(self, weights):
-        if isinstance(weights, str):
-            if weights.endswith(".bolt"):
-                self.inference = self.invoke_bolt
-                self.set_bolt_weight(weights)
-                self.interpreter = self.bolt_interpreter
-                # # test output of bolt EXP4
-                # tflite_weights = weights.replace("_f32.bolt", ".tflite")
-                # self.set_tflite_weights(tflite_weights)
-
+        if self.backend == "bolt":
+            if isinstance(weights, str):
+                if weights.endswith(".bolt"):
+                    self.inference = self.invoke_bolt
+                    self.set_bolt_weight(weights)
+                    self.interpreter = self.bolt_interpreter
+                else:
+                    raise TypeError("{} doesn't end with .bolt".format(weights))
             else:
-                self.inference = self.invoke
-                self.set_tflite_weights(weights)
-                self.interpreter = self.bolt_interpreter
+                raise TypeError("{} is not path-like".format(weights))
+
+        elif self.backend == "tflite":
+            if isinstance(weights, str):
+                if weights.endswith(".tflite"):
+                    self.inference = self.invoke
+                    self.set_tflite_weights(weights)
+                    self.interpreter = self.bolt_interpreter
+                else:
+                    raise TypeError("{} doesn't end with .tflite".format(weights))
+            else:
+                raise TypeError("{} is not path-like".format(weights))
+
+        elif self.backend == "tf" or self.backend == "tensorflow":
+            self.set_tf_weights(weights)
+
+        else:
+            raise NotImplementedError("{} has not been implemented".format(self.backend))
 
     def set_tflite_weights(self, weights):
-        """Set weight with memory tensor."""
-        # with self.graph.as_default():
-        #     self.actor_var.set_weights(weights)
         logging.info("====================Create TFLite Interpreter======================")
         self.create_tflite_interpreter(weights)
 
@@ -584,18 +599,29 @@ class ImpalaCnnOptLite(XTModel):
         logging.info("====================Create Bolt Interpreter======================")
         self.create_bolt_interpreter(weights)
 
+    def set_tf_weights(self, weights):
+        """Set weight with memory tensor."""
+        with self.graph.as_default():
+            logging.info("====================Create TF Interpreter======================")
+            # order = weights["order"]
+            # logging.info("=====================P {} Use Weight {}========================".format(os.getpid(), order))
+            # weights = weights["weight"]
+            self.actor_var.set_weights(weights)
+
     def get_weights(self):
         """Get weights."""
-        # with self.graph.as_default():
-        #     return self.actor_var.get_weights()
-        if not hasattr(self, "model_num"):
-            setattr(self, "model_num", 0)
-        else:
-            setattr(self, "model_num", (getattr(self, "model_num") + 1) % 15)
-        save_path = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_{}.pb". \
-            format(getattr(self, "model_num"))
-        pb_file = self.freeze_graph(save_path)
-        return pb_file
+        if self.backend == "tf" or self.backend == "tensorflow":
+            with self.graph.as_default():
+                return self.actor_var.get_weights()
+        elif self.backend == "bolt" or self.backend == "tflite":
+            if not hasattr(self, "model_num"):
+                setattr(self, "model_num", 0)
+            else:
+                setattr(self, "model_num", (getattr(self, "model_num") + 1) % 25)
+            save_path = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_{}.pb". \
+                format(getattr(self, "model_num"))
+            pb_file = self.freeze_graph(save_path)
+            return pb_file
 
 
 def calc_baseline_loss(advantages):

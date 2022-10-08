@@ -17,7 +17,7 @@ env_para:
 env_num: 3
 group_num: 1
 speedup: 3
-backend: bolt
+compress: True
 
 
 agent_para:
@@ -46,8 +46,9 @@ model_para:
         peers:
       self:
         rank:
+    backend: tf
 
 benchmark:
   archive_root: ./logs
-  id: PIPELINE_SLEEP_NonBlock
+  id: PIPELINE_SLEEP(4)_NonBlock
 

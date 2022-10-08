@@ -104,6 +104,7 @@ def train_main(alg, array_list, weight_list, process_num, model_q, model_path, e
 def grad_communicate(alg_para, id_, array_list, weight_list, train_list, event_dict, grad_q):
     """Create subprocess."""
     os.environ["CUDA_VISIBLE_DEVICES"] = str(id_ % 4)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(1)
     print("start ", id_)
 
     alg = alg_builder(**alg_para)
