@@ -60,7 +60,9 @@ from xt.model.tf_utils import TFVariables, restore_tf_variable
 from xt.model.model_utils import state_transform, custom_norm_initializer
 from zeus.common.util.common import import_config
 from absl import logging
-from tensorflow_core.python.framework import graph_util
+# from tensorflow_core.python.framework import graph_util
+# from tensorflow import graph_util
+from tensorflow.compat.v1 import graph_util
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
@@ -318,7 +320,10 @@ class ImpalaCnnOptLite(XTModel):
         if self.backend == "tf" or self.backend == "tensorflow":
             return self.predict_(state)
 
-        state = [s.astype(np.float32) for s in state]
+        if self.input_dtype == "float32":
+            state = [s.astype(np.float32) for s in state]
+        else:
+            state = [s.astype(np.uint8) for s in state]
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
         # state = [np.zeros((84, 84, 4), dtype=np.float32) for i in range(5)]
@@ -577,9 +582,9 @@ class ImpalaCnnOptLite(XTModel):
         elif self.backend == "tflite":
             if isinstance(weights, str):
                 if weights.endswith(".tflite"):
-                    self.inference = self.invoke
+                    self.inference = self.invoke_tflite
                     self.set_tflite_weights(weights)
-                    self.interpreter = self.bolt_interpreter
+                    self.interpreter = self.tflite_interpreter
                 else:
                     raise TypeError("{} doesn't end with .tflite".format(weights))
             else:

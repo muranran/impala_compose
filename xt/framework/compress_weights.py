@@ -1,11 +1,10 @@
 import logging
 import google.protobuf.message
-from tensorflow_core.python.framework import graph_util
 import subprocess
 from typing import List, Dict
 from tensorflow.compat.v1 import Graph, GraphDef, import_graph_def, Session
 from tensorflow.compat.v1.gfile import GFile
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import graph_def_editor as gde
 import re
 from typing import Tuple
@@ -45,19 +44,21 @@ class CompressWeights:
                 raw_weight = self.raw_weights_queue.get()
                 try:
                     start_0 = time()
-                    compress_weight = self.compress_tool(raw_weight)
+
+                    compress_weight_ = self.compress_tool(raw_weight)
+
                     compress_time = time() - start_0
                     logging.info("==================================\n"
                                  "Compress Time: {:.2f} ms\n"
                                  "==================================\n"
-                                 .format(compress_time*1000))
+                                 .format(compress_time * 1000))
                 except google.protobuf.message.DecodeError as err:
                     print("\"{}\" has been overlaid")
                     continue
                 except ValueError as err_v:
                     print(err_v)
                     continue
-                self.compress_weights_queue.put(compress_weight)
+                self.compress_weights_queue.put(compress_weight_)
             # else:
             #     time.sleep(0.2)
 
@@ -67,27 +68,31 @@ class CompressWeights:
         print("xt_compress_worker_{} start...".format(cid))
         idle_times = 0
         while True:
+            # print("TYPE:{}, {}, {}".format(type(raw_weights_), raw_weights_.empty(), raw_weights_.qsize()))
             if not raw_weights_.empty():
                 raw_weight = raw_weights_.get()
                 try:
                     start_0 = time()
-                    compress_weight_ = compress_tool(raw_weight)
+
+                    compress_weight_ = exp2_p_f(raw_weight)
+                    # compress_weight_ = None
+
                     compress_time = time() - start_0
                     print("==================================\n"
                           "Compress_{} Time: {:.2f} ms\n"
                           "==================================\n"
                           .format(cid, compress_time * 1000))
                 except ValueError as err_v:
-                    print(err_v)
+                    logging.info("===================GET BUG {}====================".format(err_v))
                     continue
                 compress_weights_.put(compress_weight_)
             else:
                 if idle_times > 100:
                     if schedule_comm is not None:
                         schedule_comm.put((cid, os.getpid()))
-                    sleep(10)
+                    sleep(2)
                     idle_times = 0
-                sleep(0.2)
+                sleep(0.5)
                 idle_times += 1
 
     # carrier type: "P" : process, "T" : thread
@@ -131,6 +136,10 @@ class CompressWeights:
 
     def start(self):
         Process(target=self.task_loop).start()
+
+    @property
+    def instance(self) -> List[Process]:
+        return self.running_proc
 
 
 # backup
@@ -178,6 +187,7 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
     with GFile(pb_file, "rb") as f:
         graph_def = GraphDef()
         graph_def.ParseFromString(f.read())
+
     with Graph().as_default() as graph:
         import_graph_def(graph_def,
                          input_map=None,
@@ -186,6 +196,7 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
                          )
     g = gde.Graph(graph.as_graph_def())
     gde.rewrite.change_batch_size(g, new_size=3, inputs=[g["state_input"]])
+
     graph_revised = g.to_graph_def()
     with Graph().as_default() as graph_r:
         import_graph_def(graph_revised,
@@ -196,34 +207,24 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
     x = graph_r.get_tensor_by_name("state_input:0")
     y = graph_r.get_tensor_by_name("explore_agent/pi_logic_outs:0")
     z = graph_r.get_tensor_by_name("explore_agent/baseline:0")
-    sess = Session(graph=graph_r)
+    sess = tf.Session(graph=graph_r)
+
+    # print("===================CONVERTER 0 ===================")
     converter = tf.lite.TFLiteConverter.from_session(sess, [x], [y, z])
+    converter.inference_input_type = tf.uint8
+    converter.quantized_input_stats = {'state_input': (128, 127)}
+    # print("===================CONVERTER 1 ===================")
     tflite_model = converter.convert()
+    # print("===================CONVERTER C ===================")
     if save_path.endswith(".tflite"):
         tflite_file = save_path
     else:
         tflite_file = os.path.join(save_path, DEFAULT_TFL_NAME)
+    # print("===================CONVERTER W ===================")
     with tf.io.gfile.GFile(tflite_file, 'wb') as f:
         f.write(tflite_model)
+    # print("===================CONVERTER E ===================")
     return tflite_file
-
-
-def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
-    graph = session.graph
-    with graph.as_default():
-        freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
-        output_names = output_names or []
-        input_graph_def = graph.as_graph_def()
-        if clear_devices:
-            for node in input_graph_def.node:
-                node.device = ""
-
-        frozen_graph = graph_util.convert_variables_to_constants(session, input_graph_def, output_names,
-                                                                 freeze_var_names)
-        if not clear_devices:
-            for node in frozen_graph.node:
-                node.device = "/GPU:0"
-        return frozen_graph
 
 
 def spilt_path_file(path_like: str) -> Tuple[str, str, str]:
@@ -260,40 +261,94 @@ def save_tflite_as_bolt(config: Dict):
     return bolt_path
 
 
-# config example:
-#   {
-#       "pb_file" : "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.pb"
-#       "input_names" : ["state_input"]
-#       "output_names" : ["explore_agent/pi_logic_outs"]
-#       "save_path" : "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/"
-#   }
-def exp2_p_f(config: Dict):
-    pb_file = config.get("pb_file")
-    input_names = config.get("input_names")
-    output_names = config.get("output_names")
-    save_path = config.get("save_path")
+# bolt cmd
+# /home/data/dxa/bolt/install_linux-x86_64_avx512_vnni/tools/X2bolt -d
+# /home/data/dxa/xingtian_revise/impala_opt/user/data/model -m model_0 -i FP32
+
+# config example: { "pb_file" : "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.pb"
+#   "input_names" : ["state_input"]
+#   "output_names" : ["explore_agent/pi_logic_outs"]
+#   "save_path" : "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/" }
+def exp2_p_f(config_: Dict):
+    pb_file = config_.get("pb_file")
+    input_names = config_.get("input_names")
+    output_names = config_.get("output_names")
+    save_path = config_.get("save_path")
 
     # tflite_file = save_as_tflite(pb_file, input_names, output_names, save_path)
-    tflite_file = save_as_tflite_resize_fix(pb_file, input_names, output_names, save_path)
+    try:
+        tflite_file = save_as_tflite_resize_fix(pb_file, input_names, output_names, save_path)
+    except:
+        logging.info("=======================FLAG ENCOUNTER BUG=================================")
+        raise RuntimeError("UNKNOWN BUG")
     logging.info("=====================Complete Weight Compress========================")
     return tflite_file
 
 
-def exp3_p_f(config: Dict):
+def exp3_p_f(config_: Dict):
     default_config = {
         "X2bolt": "/home/data/dxa/bolt/install_linux-x86_64_avx512_vnni/tools/X2bolt",
     }
-    tflite_file = exp2_p_f(config)
-    config.update({"tflite_file": tflite_file})
-    config.update(default_config)
-    bolt_file = save_tflite_as_bolt(config)
+    tflite_file = exp2_p_f(config_)
+    config_.update({"tflite_file": tflite_file})
+    config_.update(default_config)
+    bolt_file = save_tflite_as_bolt(config_)
     return bolt_file
 
 
+# get fp32 from uint8 (input type)
+def pb_to_bolt_from_template(config_: Dict):
+    model_store = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model"
+    pb_file = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model_0.pb"
+    model_fp32_template = "model_fp32_template.pb"
+
+    pass
+
+
 if __name__ == '__main__':
+    # config = {
+    #     "X2bolt": "/home/data/dxa/bolt/install_linux-x86_64_avx512_vnni/tools/X2bolt",
+    #     "tflite_file": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_10.tflite",
+    # }
+    # bolt_path = save_tflite_as_bolt(config)
+    # print(bolt_path)
+
+    # config = {
+    #     "pb_file": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.pb",
+    #     "input_names": ["state_input"],
+    #     "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
+    #     "save_path": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.tflite"
+    # }
+    # start_0 = time()
+    # bolt_path = exp2_p_f(config)
+    # tt = time() - start_0
+    # print(bolt_path)
+    # print("time is : {:.2f} ms".format(tt*1000))
+
+    raw_weights = Queue()
+    compress_weights = Queue()
+    compress_workers = CompressWeights(shared_queue=[raw_weights, compress_weights])
+    compress_workers.register_weights_process_function(exp2_p_f)
+    compress_workers.start_multi_task()
+
+    print("Start Test Multi-Task Compress Tool.")
     config = {
-        "X2bolt": "/home/data/dxa/bolt/install_linux-x86_64_avx512_vnni/tools/X2bolt",
-        "tflite_file": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_10.tflite",
+        "pb_file": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.pb",
+        "input_names": ["state_input"],
+        "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
+        "save_path": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.tflite"
     }
-    bolt_path = save_tflite_as_bolt(config)
-    print(bolt_path)
+    last_transfer_time = time()
+    for i in range(1000):
+        sleep(2)
+        raw_weights.put(config)
+        print("Putting Raw Weight...")
+        print("R: {}\tC: {}".format(raw_weights.qsize(), compress_weights.qsize()))
+        # pending_workers = compress_workers.schedule()
+        pending_workers = 0
+        if not compress_weights.empty():
+            compress_weight = compress_weights.get()
+            current_time = time()
+            print("Start Transferring Compressed Weight...W : {}\tT : {:.2f} ms\tP : {}"
+                  .format(compress_weight, (current_time - last_transfer_time) * 1000, pending_workers))
+            last_transfer_time = current_time

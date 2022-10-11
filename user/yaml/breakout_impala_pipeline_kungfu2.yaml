@@ -46,9 +46,9 @@ model_para:
 #        peers:
 #      self:
 #        rank:
-    backend: tf
+    backend: tflite
 
 benchmark:
   archive_root: ./logs
-  id: PIPELINE_SLEEP(4)_NonBlock
+  id: PIPELINE_SLEEP(s4_t1_la)_Bolt_NonBlock
 

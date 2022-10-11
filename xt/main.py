@@ -82,7 +82,7 @@ def main():
         "\n{}\n XT start work...\n{}\n{}".format("*" * 50, _exp_params, "*" * 50)
     )
 
-    import tensorflow as tf
+    import tensorflow.compat.v1 as tf
     import os
     import numpy as np
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"

@@ -1,14 +1,17 @@
+import os
 import time
+from typing import List
 
 import graph_def_editor as gde
 import numpy as np
+import tensorflow.compat.v1 as tf
 from tensorflow.compat.v1 import Graph, GraphDef, import_graph_def, Session
 from tensorflow.compat.v1.gfile import GFile
-import tensorflow as tf
-from typing import List
-import os
+from tensorflow.keras.layers import Conv2D, Flatten, Lambda
+from functools import partial
 
 DEFAULT_TFL_NAME = "model.tflite"
+os.environ["CUDA_VISIBLE_DEVICES"] = str(-1)
 
 
 def save_as_tflite(pb_file: str, input_names: List[str], output_names: List[str], save_path: str):
@@ -171,7 +174,153 @@ def cal_actions_with_np():
     print(actions, "{:.2f}ms".format(t * 1000))
 
 
+def state_transform(x, mean=1e-5, std=255., input_dtype="float32"):
+    """Normalize data."""
+    if input_dtype in ("float32", "float", "float64"):
+        return x
+
+    # only cast non-float32 state
+    if np.abs(mean) < 1e-4:
+        return tf.cast(x, dtype='float32') / std
+    else:
+        return (tf.cast(x, dtype="float32") - mean) / std
+
+
+class NewModel:
+    def __init__(self):
+        filters_84x84 = [
+            [16, 8, 4],
+            [32, 4, 2],
+            [256, 11, 1],
+        ]
+        self.sta_mean = 0.
+        self.sta_std = 255.
+        self.input_dtype = "uint8"
+        self.filter_arch = filters_84x84
+        self._transform = partial(state_transform,
+                                  mean=self.sta_mean,
+                                  std=self.sta_std,
+                                  input_dtype=self.input_dtype)
+        pass
+
+    def create_model(self):
+        with tf.variable_scope("explore_agent"):
+            state_input = Lambda(self._transform)(self.ph_state)
+            last_layer = state_input
+
+            for (out_size, kernel, stride) in self.filter_arch[:-1]:
+                last_layer = Conv2D(
+                    out_size,
+                    (kernel, kernel),
+                    strides=(stride, stride),
+                    activation="relu",
+                    padding="same",
+                )(last_layer)
+
+            # last convolution
+            (out_size, kernel, stride) = self.filter_arch[-1]
+            convolution_layer = Conv2D(
+                out_size,
+                (kernel, kernel),
+                strides=(stride, stride),
+                activation="relu",
+                padding="valid",
+            )(last_layer)
+
+            self.pi_logic_outs = tf.squeeze(
+                Conv2D(4, (1, 1), padding="same")(convolution_layer),
+                axis=[1, 2],
+                name="pi_logic_outs"
+            )
+
+            baseline_flat = Flatten()(convolution_layer)
+            self.baseline = tf.squeeze(
+                tf.layers.dense(
+                    inputs=baseline_flat,
+                    units=1,
+                    activation=None,
+                    kernel_initializer=custom_norm_initializer(0.01),
+                ),
+                1,
+                name="baseline",
+            )
+            self.out_actions = tf.squeeze(
+                tf.multinomial(self.pi_logic_outs, num_samples=1, output_dtype=tf.int32),
+                1,
+                name="out_action",
+            )
+
+
+def gde_revise_input():
+    # Create a graph
+    tf_g = tf.Graph()
+    with tf_g.as_default():
+        a = tf.constant(1.0, shape=[2, 3], name="a")
+        c = tf.add(
+            tf.placeholder(dtype=tf.uint8),
+            tf.placeholder(dtype=tf.uint8),
+            name="c")
+
+    # Serialize the graph
+    g = gde.Graph(tf_g.as_graph_def())
+
+    # Modify the graph.
+    # In this case we replace the two input placeholders with constants.
+    # One of the constants (a) is a node that was in the original graph.
+    # The other one (b) we create here.
+    b = gde.make_const(g, "b", np.full([2, 3], 2.0, dtype=np.float32))
+    # b = gde.make_placeholder(g, "b", shape=[2, 3], dtype=tf.float32)
+    gde.swap_inputs(g[c.op.name], [g[a.name], b.output(0)])
+
+    # Reconstitute the modified serialized graph as TensorFlow graph
+    input0 = np.full([2, 3], 2.0, dtype=np.float32)
+    with g.to_tf_graph().as_default():
+        # Run a session using the modified graph and print the value of c
+        with tf.Session() as sess:
+            res = sess.run(c.name)
+            print("Result is:\n{}".format(res))
+
+
+def rebuild_graph():
+    filters_84x84 = [
+        [16, 8, 4],
+        [32, 4, 2],
+        [256, 11, 1],
+    ]
+
+
+def revise_graph_input_test():
+    # a = tf.placeholder(shape=[], dtype=tf.float32, name='a')
+    b = tf.placeholder(shape=[], dtype=tf.float32, name='b')
+    c = tf.placeholder(shape=[], dtype=tf.float32, name='c')
+    a = tf.constant(5.)
+    # build graph
+    d = a * b
+
+    op = b.consumers()[0]  # <op here is the mul operation of d>
+    print(op)
+    op._update_input(1, c)  # <update the first input of op with c>
+
+    with tf.Session().as_default() as sess:
+        res = sess.run([d], feed_dict={"c:0": 3})
+        print(res)
+
+def testn():
+    frozen_graph = "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.pb"
+    with GFile(frozen_graph, "rb") as f:
+        graph_def = GraphDef()
+        graph_def.ParseFromString(f.read())
+    with Graph().as_default() as graph:
+        import_graph_def(graph_def,
+                         input_map=None,
+                         return_elements=None,
+                         name=""
+                         )
+
+
 if __name__ == '__main__':
     # main()
     # resize_shape_test()
-    cal_actions_with_np()
+    # cal_actions_with_np()
+    # gde_revise_input()
+    revise_graph_input_test()

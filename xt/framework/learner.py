@@ -21,7 +21,7 @@
 
 import os
 import threading
-from time import time
+from time import time, sleep
 from copy import deepcopy
 from multiprocessing import Queue, Process
 import numpy as np
@@ -283,17 +283,24 @@ class TrainWorker(object):
                 logging.info("Compress Weight Error: raw weight store is full")
                 raise RuntimeError("raw weight store is full")
             else:
-                config = {
-                    "pb_file": weight,
-                    "input_names": ["state_input"],
-                    "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
-                    "save_path": weight.replace(".pb", ".tflite")
-                }
-                raw_weight_queue.put(config)
+                if isinstance(weight, str):
+                    config = {
+                        "pb_file": weight,
+                        "input_names": ["state_input"],
+                        "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
+                        "save_path": weight.replace(".pb", ".tflite")
+                    }
+                    raw_weight_queue.put(config)
+                else:
+                    raw_weight_queue.put(weight)
 
             if not compress_weight_queue.empty() or (not hasattr(self, "first_commit")):
                 compress_weight = compress_weight_queue.get()
-                logging.info("===================Invoke Compress Weight {}====================".format(compress_weight))
+                if isinstance(compress_weight, str):
+                    logging.info("===================Invoke Compress Weight {}===================="
+                                 .format(compress_weight))
+                else:
+                    logging.info("===================Invoke Compress Weight ====================")
                 self._dist_policy_(compress_weight, save_index, dist_cmd)
                 setattr(self, "first_commit", 0)
 
@@ -339,6 +346,21 @@ class TrainWorker(object):
 
         return False
 
+    def load_data(self):
+        max_load_times = 20
+        for _tf_val in range(max_load_times):
+            # logging.debug("wait data for preparing-{}...".format(_tf_val))
+            with self.logger.wait_sample_timer:
+                data = self.train_q.recv()
+            with self.logger.prepare_data_timer:
+                data = bytes_to_str(data)
+                self.record_reward(data)
+                self.alg.prepare_data(data["data"], ctr_info=data["ctr_info"])
+            self.elapsed_episode += 1
+
+            if self.train_q.empty:
+                break
+
     def train(self):
         """Train model."""
         if not self.alg.async_flag:
@@ -349,21 +371,22 @@ class TrainWorker(object):
         while True:
             # monitor resource
             resource_monitor()
-            for _tf_val in range(self.alg.prepare_data_times):
-                # logging.debug("wait data for preparing-{}...".format(_tf_val))
-                with self.logger.wait_sample_timer:
-                    data = self.train_q.recv()
-                with self.logger.prepare_data_timer:
-                    data = bytes_to_str(data)
-                    self.record_reward(data)
-                    self.alg.prepare_data(data["data"], ctr_info=data["ctr_info"])
-
-                # dqn series algorithm will count the 'SARSA' as one episode.
-                # and, episodic count will used for train ready flag.
-                # each pbt exploit.step will reset the episodic count.
-                self.elapsed_episode += 1
-                # logging.debug("Prepared data-{}.".format(_tf_val))
-                # support sync model before
+            self.load_data()
+            # for _tf_val in range(self.alg.prepare_data_times):
+            #     # logging.debug("wait data for preparing-{}...".format(_tf_val))
+            #     with self.logger.wait_sample_timer:
+            #         data = self.train_q.recv()
+            #     with self.logger.prepare_data_timer:
+            #         data = bytes_to_str(data)
+            #         self.record_reward(data)
+            #         self.alg.prepare_data(data["data"], ctr_info=data["ctr_info"])
+            #
+            #     # dqn series algorithm will count the 'SARSA' as one episode.
+            #     # and, episodic count will used for train ready flag.
+            #     # each pbt exploit.step will reset the episodic count.
+            #     self.elapsed_episode += 1
+            #     # logging.debug("Prepared data-{}.".format(_tf_val))
+            #     # support sync model before
 
             # run pbt if need.
             if self.pbt_aid:
@@ -392,6 +415,7 @@ class TrainWorker(object):
             with self.lock, self.logger.train_timer:
                 # logging.debug("start train process-{}.".format(self.train_count))
                 loss = self.alg.train(episode_num=self.elapsed_episode)
+                # sleep(0.5)
 
             if type(loss) in (float, np.float64, np.float32, np.float16, np.float):
                 self.logger.record(train_loss=loss)

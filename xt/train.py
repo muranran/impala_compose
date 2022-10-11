@@ -20,13 +20,16 @@
 """DESC: Xingtian train entrance."""
 
 import os
+import shlex
 import signal
+import subprocess
 import sys
 import time
 from subprocess import Popen
 import pprint
 import copy
 
+import psutil
 from absl import logging
 import yaml
 import zmq
@@ -40,7 +43,8 @@ from zeus.common.util.get_xt_config import parse_xt_multi_case_paras, \
     check_if_patch_local_node, get_pbt_set
 from xt.framework.compress_weights import CompressWeights, empty_weights_proc_func, experiment_1_proc_func, exp2_p_f, \
     exp3_p_f
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
+
 # os.environ["CUDA_VISIBLE_DEVICES"] = str(0)
 TRAIN_PROCESS_LIST = list()
 
@@ -103,7 +107,7 @@ def _makeup_learner(config_info, data_url, verbosity):
 
     if need_compress:
 
-        compress_worker = CompressWeights(shared_queue=shared_queue)
+        compress_worker = CompressWeights(shared_queue=shared_queue, num_workers=1)
         if backend == "bolt":
             compress_worker.register_weights_process_function(exp3_p_f)
         elif backend == "tflite":
@@ -114,8 +118,49 @@ def _makeup_learner(config_info, data_url, verbosity):
             raise NotImplementedError("Default option {tf} has not been implemented...")
 
         logging.info("========================Compress weight process start=========================")
-        # compress_worker.start()
         compress_worker.start_multi_task()
+
+        # Debug
+        # raw_weights = shared_queue[0]
+        # compress_weights = shared_queue[1]
+        # last_transfer_time = time.time()
+        #
+        # running = compress_worker.instance
+        # for i in range(1000):
+        #     time.sleep(2)
+        #     config = {
+        #         "pb_file": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.pb",
+        #         "input_names": ["state_input"],
+        #         "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
+        #         "save_path": "/home/data/dxa/xingtian_revise/impala_opt/user/data/model/model_0.tflite"
+        #     }
+        #     raw_weights.put(config)
+        #     print("Putting Raw Weight...")
+        #     print("R: {}\tC: {}".format(raw_weights.qsize(), compress_weights.qsize()))
+        #     for pi, rp in enumerate(running):
+        #         # info = subprocess.run(shlex.split("strace -p {}".format(rp.pid)),
+        #         #                       capture_output=True, check=True, encoding="utf-8").stdout
+        #
+        #         print("process_{} is {}alive, status : {}, detail info : {}".format(pi, ["not ", ""][rp.is_alive()],
+        #                                                                             psutil.Process(rp.pid).status(),
+        #                                                                             rp.pid
+        #                                                                             ))
+
+            # print("OS ENV PARA {}:\n".format(type(os.environ)))
+            # for para in os.environ:
+            #     print(para, os.environ[para])
+            # pending_workers = compress_workers.schedule()
+            # example_path = exp2_p_f(config)
+            # print("Test Exp2func result: {}".format(example_path))
+            # pending_workers = 0
+            # if not compress_weights.empty():
+            #     compress_weight = compress_weights.get()
+            #     current_time = time.time()
+            #     print("Start Transferring Compressed Weight...W : {}\tT : {:.2f} ms\tP : {}"
+            #           .format(compress_weight, (current_time - last_transfer_time) * 1000, pending_workers))
+            #     last_transfer_time = current_time
+
+        # raise RuntimeError("BREAKPOINT")
 
     for _learner in controller.tasks:
         _learner.start()

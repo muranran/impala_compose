@@ -42,5 +42,5 @@ model_para:
 
 benchmark:
   archive_root: ./logs
-  id: PIPELINE_SLEEP_NonBlock
+  id: PIPELINE_NonBlock
 
