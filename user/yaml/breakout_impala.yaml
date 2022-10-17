@@ -24,7 +24,7 @@ model_para:
   actor:
     model_name: ImpalaCnnOpt
     state_dim: [84,84,4]
-    input_dtype: float #uint8
+    input_dtype: uint8 #uint8
     state_mean: 0.0
     state_std: 255.0
     action_dim: 4
@@ -33,8 +33,8 @@ model_para:
       sample_batch_step: 128
       grad_norm_clip: 40.0
 
-env_num: 10
+env_num: 32
 speedup: True
 benchmark:
-  archive_root: ./logs
-  id: breakout_impala_test
+  archive_root: ./logs1011
+  id: breakout_impala
