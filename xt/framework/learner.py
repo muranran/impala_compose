@@ -62,6 +62,7 @@ class Learner(object):
     ):
         self._name = name
         self.alg_para = deepcopy(alg_para)
+
         self.process_num = self.alg_para.get("process_num", 1)
 
         self.eval_adapter = eval_adapter
@@ -614,8 +615,8 @@ def setup_learner(config, eval_adapter, learner_index, data_url=None, **kwargs):
     model_info = alg_para["model_info"]
 
     # set actor.type as learner
+    model_info["actor"].update({"trainable": True})
     model_info["actor"].update({"type": "learner"})
-
     # add benchmark id
     bm_info = config.get("benchmark", dict())
 

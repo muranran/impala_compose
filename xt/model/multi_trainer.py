@@ -1,3 +1,7 @@
+import logging
+
+import psutil
+from termcolor import colored
 import os
 import glob
 import numpy as np
@@ -15,8 +19,8 @@ import setproctitle
 
 os.environ["KERAS_BACKEND"] = "tensorflow"
 os.environ["KUNGFU_ALLREDUCE_STRATEGY"] = "BINARY_TREE_STAR"
-os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 
 class MultiTrainerModel(object):
@@ -97,14 +101,17 @@ class MultiTrainer(object):
         self.device_id = device_id
 
     def process(self):
+        o_str = "==================MULTI_TRAINER_{} START ===================".format(self.trainer_id)
         while True:
-            # print("接收数据=====================================")
+            o_str = "接收数据====================================="
+            print(colored(o_str, "red"))
             recv_data = self.request_q.recv()
-            # print("成功接收数据=====================================")
+            o_str = "成功接收数据====================================="
+            print(colored(o_str, "red"))
             ctr_info, data = recv_data
             if ctr_info['cmd'] in self.process_fn.keys():
                 proc_fn = self.process_fn[ctr_info['cmd']]
-                proc_fn(data)
+                # proc_fn(data)
             else:
                 raise KeyError("invalib cmd: {}".format(ctr_info['cmd']))
 
@@ -124,16 +131,51 @@ class MultiTrainer(object):
         gpu_config = self.config_info.get('gpu_config', None)
         gpu_self = gpu_config.get('self', None)
 
-        # print("self.trainer_id =============== {}".format(self.trainer_id))
+        print(colored("self.trainer_id =============== {}".format(self.trainer_id), "blue"))
 
         gpu_self.update({'rank': self.trainer_id})
         init_from_config(gpu_config)
 
+        self.device_id = 1
         os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = str(self.device_id)
         os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
+        try:
+            # self.model = model_builder(self.config_info)
+            pass
+        except:
+            raise RuntimeError("UNKNOWN BUG IN BUILDING MODEL")
+        self.model = None
 
-        self.model = model_builder(self.config_info)
-        # print("self.config_info: ============", self.config_info)
+        o_str = "self.config_info: {}============".format(self.config_info)
+        print(colored(o_str, "blue"))
+
+        o_str = "os env:\n{}".format(os.environ)
+        print(colored(o_str, "blue"))
+
+        # test code
+        # import tensorflow.compat.v1 as tf
+        #
+        # import numpy as np
+        # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        print(colored("==================XT Available GPU : {} / {} ====================="
+                      "\nE: {}"
+                      .format(tf.config.experimental.list_physical_devices(device_type='GPU'),
+                              os.environ["CUDA_VISIBLE_DEVICES"], 2), "green"))
+        print(colored("Create Graph", "green"))
+        graph = tf.Graph()
+        with graph.as_default():
+            a = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="a")
+            b = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="b")
+            c = a + b
+
+        in1 = np.random.randn(4, 4).astype(np.float32)
+        in2 = np.random.randn(4, 4).astype(np.float32)
+        print(colored("Compute test", "green"))
+        with tf.Session(graph=graph).as_default() as sess:
+
+            res = sess.run([c], feed_dict={"a:0": in1, "b:0": in2})
+            print(colored("res is: " + res, "green"))
+        print(colored("Compute end", "green"))
         self.process_fn = {'trainer': self.train}
 
         self.process()
@@ -160,12 +202,19 @@ def create_multi_trainer(gpu_nums, model_info):
     cluster.update({'peers': gpu_port})
 
     trainer_q = []
+    p = gpu_nums / 3
     for i in range(gpu_nums):
         if i == 0:
             continue
-        else:
-            print("i==================={}".format(i))
+        elif i < p:
             trainer_q.append(create_trainer(i, model_info, 0))
+            continue
+        elif i < 2 * p:
+            trainer_q.append(create_trainer(i, model_info, 1))
+            continue
+        else:
+            # print("i==================={}".format(i))
+            trainer_q.append(create_trainer(i, model_info, 2))
 
     from kungfu.python import init_from_config
 
@@ -186,9 +235,19 @@ def create_trainer(trainer_id, model_info, device_id):
     trainer = MultiTrainer(trainer_id, trainer_info, reply_q, device_id)
 
     # 构建模型并训练
+
     p = Process(target=trainer.start)
 
     p.start()
+
+    o_str = "process_{} start.".format(p.pid)
+    print(colored(o_str, "red"))
+
+    # while True:
+    #     sleep(0.5)
+    #     o_str = "mlp_{} is{} alive, \nstate: {}".format(p.pid, {True: "", False: " not"}.get(p.is_alive()),
+    #                                                     psutil.Process(p.pid).status())
+    #     print(colored(o_str, "green"))
     return trainer.request_q
 
 
@@ -240,8 +299,6 @@ def send_train_data(state, label, gpu_nums, trainer_q):
             input_split = label[i][j * shape_split: (j + 1) * shape_split]
             label_split[j].append(input_split)
 
-
-
     for j in range(gpu_nums - 1):
         train_data = {'state': state_split[j + 1][0], 'label': label_split[j + 1]}
         # print("state.length =========== {}".format(len(state_split[j + 1])))
@@ -249,7 +306,9 @@ def send_train_data(state, label, gpu_nums, trainer_q):
         train_msg = message(train_data, cmd="trainer")
         trainer_q[j].send(train_msg)
 
-    return state_split[0][0], label_split[0]
+    # return state_split[0][0], label_split[0]
+    return state, label
+
 
 def syn_init_model(sess):
     from kungfu.tensorflow.initializer import BroadcastGlobalVariablesOp
@@ -264,5 +323,5 @@ def allreduce_optimizer(lr, function, with_keras=False, **kwargs):
     if with_keras:
         optimizer = SynchronousSGDOptimizer(optimizer, with_keras=True, nccl=True)
     else:
-        optimizer = SynchronousSGDOptimizer(optimizer, nccl=True)
+        optimizer = SynchronousSGDOptimizer(optimizer, nccl=False)
     return optimizer

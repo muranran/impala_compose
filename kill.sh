@@ -1,4 +1,4 @@
-# shellcheck disable=SC2046
+#!/bin/bash
 kill -9 $(pgrep xt_main)
 kill -9 $(pgrep xt_explorer)
 kill -9 $(pgrep xt_broker)

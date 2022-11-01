@@ -3,7 +3,7 @@ alg_para:
   alg_config:
     train_per_checkpoint: 1
     prepare_times_per_train: 1
-    BATCH_SIZE: 320
+    BATCH_SIZE: 160
 
 env_para:
   env_name: EnvPool
@@ -40,12 +40,14 @@ model_para:
       sample_batch_step: 160
       grad_norm_clip: 40.0
 
-#      gpu_nums: 1
-#    gpu_config:
-#      cluster:
-#        peers:
-#      self:
-#        rank:
+      gpu_nums: 2
+    use_ml: True
+    gpu_config:
+      cluster:
+        peers:
+      self:
+        rank:
+
     backend: tflite
 
 benchmark:

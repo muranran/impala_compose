@@ -39,6 +39,9 @@ import time
 import numpy as np
 
 from functools import partial
+
+from xt.model.multi_trainer import syn_init_model, allreduce_optimizer
+
 import xt.model.impala.vtrace as vtrace
 from tensorflow.python.util import deprecation
 from zeus.common.util.register import Registers
@@ -119,6 +122,12 @@ class ImpalaCnnOptLite(XTModel):
 
         self.bolt_interpreter = None
         self.backend = model_info.get("backend", "tf")
+
+        # multi_learner para
+        self.trainable = model_info.get("trainable", False)
+        self.gpu_nums = model_config.get('gpu_nums', 1)
+        self.type = model_info.get("type", "actor")
+        self.use_ml = model_info.get("use_ml", False)
 
         super().__init__(model_info)
 
@@ -219,6 +228,12 @@ class ImpalaCnnOptLite(XTModel):
             else:
                 learning_rate = LR
             optimizer = AdamOptimizer(learning_rate)
+            # multi_trainer
+            if self.trainable and self.use_ml:
+                # self.optimizer = allreduce_optimizer(self._lr, tf.train.AdamOptimizer)
+                # optimizer = allreduce_optimizer(learning_rate, tf.train.AdamOptimizer)
+                pass
+
         elif self.opt_type == "rmsprop":
             optimizer = tf.train.RMSPropOptimizer(LR, decay=0.99, epsilon=0.1, centered=True)
         else:
@@ -234,11 +249,18 @@ class ImpalaCnnOptLite(XTModel):
         self.train_op = optimizer.apply_gradients(clipped_gvs, global_step=global_step)
 
         # fixme: help to show the learning rate among training processing
-        self.lr = optimizer._lr
+        # self.lr = optimizer._lr
+        self.lr = learning_rate
 
         self.actor_var = TFVariables(self.out_actions, self.sess)
 
         self.sess.run(global_variables_initializer())
+
+        # multi_learner
+        if self.use_ml:
+            if self.trainable:
+                # self.sess = syn_init_model(self.sess)
+                pass
 
         self.explore_paras = tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES,

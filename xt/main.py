@@ -39,7 +39,10 @@ from zeus.common.util.get_xt_config import OPEN_TASKS_SET
 from zeus.common.util.logger import VERBOSITY_MAP
 from xt.framework.remoter import distribute_xt_if_need
 from zeus.common.util.logger import set_logging_format
+
 set_logging_format()
+
+
 # logging.set_verbosity(logging.INFO)
 
 
@@ -77,7 +80,7 @@ def main():
     else:
         logging.warning("un-known logging level-{}".format(args.verbosity))
 
-    _exp_params = pprint.pformat(args, indent=0, width=1,)
+    _exp_params = pprint.pformat(args, indent=0, width=1, )
     logging.info(
         "\n{}\n XT start work...\n{}\n{}".format("*" * 50, _exp_params, "*" * 50)
     )
@@ -103,7 +106,6 @@ def main():
 
         res = sess.run([c], feed_dict={"a:0": in1, "b:0": in2})
         print(res)
-
 
     with open(args.config_file, "r") as conf_file:
         _info = yaml.safe_load(conf_file)
