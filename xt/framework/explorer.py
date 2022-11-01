@@ -74,11 +74,7 @@ class Explorer(object):
                 self.explorer_id, explore_time))
 
             while True:
-                # logging.info("===================explorer_{} updating model weight================="
-                #              .format(self.explorer_id))
                 model_type = self.rl_agent.update_model()
-                # logging.info("===================explorer_{} exploring================="
-                #              .format(self.explorer_id))
                 stats = self.rl_agent.explore(explore_time)
 
                 explored_times += explore_time

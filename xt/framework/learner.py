@@ -55,7 +55,6 @@ class Learner(object):
             data_url=None,
             benchmark_info=None,
             name="T0",
-            **kwargs
     ):
         self._name = name
         self.alg_para = deepcopy(alg_para)
@@ -93,9 +92,6 @@ class Learner(object):
         self._explorer_ids = list()
 
         self._pbt_aid = None
-
-        # compress weight comm
-        self.shared_queue = kwargs.get("shared_queue", None)
 
         # For Cloud
         self.s3_path = None
@@ -164,8 +160,7 @@ class Learner(object):
             self.stats_deliver,
             self.eval_adapter,
             log_interval=self._log_interval,
-            name=self._name,
-            shared_queue=self.shared_queue,
+            name=self._name
         )
         self.train_worker.explorer_ids = self.explorer_ids
         self.train_worker.pbt_aid = self._pbt_aid
@@ -242,9 +237,6 @@ class TrainWorker(object):
         self._pbt_aid = None
         self._train_data_counter = defaultdict(int)
 
-        # compress weight comm
-        self.shared_queue = kwargs.get("shared_queue", None)
-
     @property
     def explorer_ids(self):
         return self._explorer_ids
@@ -262,32 +254,6 @@ class TrainWorker(object):
         self._pbt_aid = val
 
     def _dist_policy(self, weight=None, save_index=-1, dist_cmd="explore"):
-        # logging.info("==================Start transferring weight to all explorers...===========")
-        # compress weight
-        # todo: if need_compress_weight
-        need_compress_weight = False
-        if not hasattr(self, "first_transfer"):
-            need_compress_weight = False
-            setattr(self, "first_transfer", False)
-        if not need_compress_weight:
-            self._dist_policy_(weight, save_index, dist_cmd)
-        else:
-            raw_weight_queue = self.shared_queue[0]  # type:Queue
-
-            compress_weight_queue = self.shared_queue[1]  # type:Queue
-
-            if raw_weight_queue.full():
-                logging.info("Compress Weight Error: raw weight store is full")
-                raise RuntimeError("raw weight store is full")
-            else:
-                raw_weight_queue.put(weight)
-
-            if not compress_weight_queue.empty():
-                # compress_weight = compress_weight_queue.get()
-                # logging.info()
-                self._dist_policy_(weight, save_index, dist_cmd)
-
-    def _dist_policy_(self, weight=None, save_index=-1, dist_cmd="explore"):
         """Distribute model tool."""
         explorer_set = self.explorer_ids
 
@@ -391,10 +357,6 @@ class TrainWorker(object):
 
             self._handle_eval_process(loss)
 
-            # rbd save h5 model
-            # keras_model_file = "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model" + "/" + "test.h5"
-            # self.alg.actor.save_keras_model(keras_model_file)
-            # self.alg.actor.save_lite_model()
             # The requirement of distribute model is checkpoint ready.
             if not self.alg.async_flag and self.alg.checkpoint_ready(self.train_count):
                 _save_t1 = time()
@@ -410,6 +372,7 @@ class TrainWorker(object):
                     policy_weight = self.alg.get_weights()
                     weight_msg = message(policy_weight, cmd="predict{}".format(self.name), sub_cmd='sync_weights')
                     self.model_q.send(weight_msg)
+
 
             if self.train_count % self._log_interval == 0:
                 self.stats_deliver.send(self.logger.get_new_info(), block=True)
@@ -430,7 +393,7 @@ class TrainWorker(object):
         data_dict = get_msg_data(train_data)
 
         # update multi agent train reward without done flag
-        if self.alg.alg_name in ("QMixAlg",) or self.alg.alg_name in ("SCCAlg",):  # fixme: unify the record op
+        if self.alg.alg_name in ("QMixAlg", ) or self.alg.alg_name in ("SCCAlg", ):  # fixme: unify the record op
             self.actual_step += np.sum(data_dict["filled"])
             self.won_in_episodes.append(data_dict.pop("battle_won"))
             self.logger.update(explore_won_rate=np.nanmean(self.won_in_episodes))
@@ -570,7 +533,7 @@ def patch_alg_within_config(config, node_type="node_config"):
     return config
 
 
-def setup_learner(config, eval_adapter, learner_index, data_url=None, **kwargs):
+def setup_learner(config, eval_adapter, learner_index, data_url=None):
     """Start learner."""
     env_para = config["env_para"]
     agent_para = config["agent_para"]
@@ -583,9 +546,6 @@ def setup_learner(config, eval_adapter, learner_index, data_url=None, **kwargs):
     # add benchmark id
     bm_info = config.get("benchmark", dict())
 
-    # compress comm
-    shared_queue = kwargs.get("shared_queue", None)
-
     learner = Learner(
         alg_para,
         env_para,
@@ -593,8 +553,7 @@ def setup_learner(config, eval_adapter, learner_index, data_url=None, **kwargs):
         eval_adapter=eval_adapter,
         data_url=data_url,
         benchmark_info=bm_info,
-        name="T{}".format(learner_index),
-        shared_queue=shared_queue
+        name="T{}".format(learner_index)
     )
 
     learner.config_info = config

@@ -31,9 +31,6 @@ by Espeholt, Soyer, Munos et al.
 
 See https://arxiv.org/abs/1802.01561 for the full paper.
 """
-import os
-import re
-import time
 
 import numpy as np
 
@@ -141,7 +138,6 @@ class ImpalaCnnOpt(XTModel):
             self.pi_logic_outs = tf.squeeze(
                 Conv2D(self.action_dim, (1, 1), padding="same")(convolution_layer),
                 axis=[1, 2],
-                name="pi_logic_outs"
             )
 
             baseline_flat = Flatten()(convolution_layer)
@@ -153,7 +149,6 @@ class ImpalaCnnOpt(XTModel):
                     kernel_initializer=custom_norm_initializer(0.01),
                 ),
                 1,
-                name="baseline",
             )
             self.out_actions = tf.squeeze(
                 tf.multinomial(self.pi_logic_outs, num_samples=1, output_dtype=tf.int32),
@@ -165,9 +160,9 @@ class ImpalaCnnOpt(XTModel):
         self.ph_bp_logic_outs = tf.placeholder(self.dtype, shape=(None, self.action_dim),
                                                name="ph_b_logits")
 
-        self.ph_actions = tf.placeholder(tf.int32, shape=(None,), name="ph_action")
-        self.ph_dones = tf.placeholder(tf.bool, shape=(None,), name="ph_dones")
-        self.ph_rewards = tf.placeholder(self.dtype, shape=(None,), name="ph_rewards")
+        self.ph_actions = tf.placeholder(tf.int32, shape=(None, ), name="ph_action")
+        self.ph_dones = tf.placeholder(tf.bool, shape=(None, ), name="ph_dones")
+        self.ph_rewards = tf.placeholder(self.dtype, shape=(None, ), name="ph_rewards")
 
         # Split the tensor into batches at known episode cut boundaries.
         # [batch_count * batch_step] -> [batch_step, batch_count]
@@ -276,17 +271,6 @@ class ImpalaCnnOpt(XTModel):
         :param: state
         :return: action_logits, action_val, value
         """
-        # from time import time
-        # start_0 = time()
-        # converter = tf.lite.TFLiteConverter.from_session(self.sess,
-        #                                                  [self.ph_state],
-        #                                                  [self.pi_logic_outs, self.baseline])
-        # tflite_model = converter.convert()
-        # convert_time = time() - start_0
-        # print("====================================")
-        # print("convert time:", convert_time)
-        # print("====================================")
-
         with self.graph.as_default():
             feed_dict = {self.ph_state: state}
             return self.sess.run([self.pi_logic_outs, self.baseline, self.out_actions],
@@ -296,189 +280,6 @@ class ImpalaCnnOpt(XTModel):
         """Save model without meta graph."""
         ck_name = self.saver.save(self.sess, save_path=file_name, write_meta_graph=False)
         return ck_name
-
-    # rbd model save h5 test
-    def save_keras_weight(self, file_name):
-        pass
-
-    def save_lite_model(self, file_name=None):
-        # default
-        if file_name is None:
-            file_name = '/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.tflite'
-        # with tf.Session(graph=self.graph).as_default() as sess:
-        converter = tf.lite.TFLiteConverter.from_session(self.sess,
-                                                         [self.ph_state],
-                                                         [self.pi_logic_outs, self.baseline])
-        tflite_model = converter.convert()
-        # with tf.io.gfile.GFile(file_name, 'wb') as f:
-        #     f.write(tflite_model)
-
-        pass
-
-    def load_lite_model(self):
-        pass
-
-    def save_keras_model(self, file_name):
-        from tensorflow.keras import backend as K
-        # from tensorflow import keras
-        from tensorflow_core.python.framework import graph_util
-        # import tensorflow as tf
-
-        def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
-            graph = session.graph
-            with graph.as_default():
-                freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
-                output_names = output_names or []
-                input_graph_def = graph.as_graph_def()
-                if clear_devices:
-                    for node in input_graph_def.node:
-                        node.device = ""
-
-                frozen_graph = graph_util.convert_variables_to_constants(session, input_graph_def, output_names,
-                                                                         freeze_var_names)
-                if not clear_devices:
-                    for node in frozen_graph.node:
-                        node.device = "/GPU:0"
-                return frozen_graph
-
-        out_path = "/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.pb"
-        # print("===========================")
-        # for t in self.explore_paras:
-        #     print(t.name)
-        # print("============================")
-        # print("===========================")
-        tensor_name_list = [tensor.name for tensor in self.graph.as_graph_def().node]
-        # print(tensor_name_list)
-        # with open("/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25_node_name.txt", "w+") as f:
-        #     for n in tensor_name_list:
-        #         f.write("{}\n".format(n))
-        # with open("/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25_trainable_node_name.txt", "w+") as f:
-        #     for n in self.explore_paras:
-        #         f.write("{}\n".format(n))
-        # print("============================")
-        # raise RuntimeError("debug...")
-        output_names = ["explore_agent/pi_logic_outs", "explore_agent/baseline"]
-        # frozen_graph = freeze_session(K.get_session(), output_names=output_names, clear_devices=True)
-        input_graph_def = self.graph.as_graph_def()
-        # freeze_var_names = self.explore_paras
-        freeze_var_names = ["state_input", "explore_agent/lambda/Cast", "explore_agent/lambda/truediv/y",
-                            "explore_agent/lambda/truediv",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform/shape",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform/min",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform/max",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform/RandomUniform",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform/sub",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform/mul",
-                            "explore_agent/conv2d/kernel/Initializer/random_uniform", "explore_agent/conv2d/kernel",
-                            "explore_agent/conv2d/kernel/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d/kernel/Assign",
-                            "explore_agent/conv2d/kernel/Read/ReadVariableOp",
-                            "explore_agent/conv2d/bias/Initializer/zeros",
-                            "explore_agent/conv2d/bias", "explore_agent/conv2d/bias/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d/bias/Assign", "explore_agent/conv2d/bias/Read/ReadVariableOp",
-                            "explore_agent/conv2d/dilation_rate", "explore_agent/conv2d/Conv2D/ReadVariableOp",
-                            "explore_agent/conv2d/Conv2D", "explore_agent/conv2d/BiasAdd/ReadVariableOp",
-                            "explore_agent/conv2d/BiasAdd", "explore_agent/conv2d/Relu",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform/shape",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform/min",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform/max",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform/RandomUniform",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform/sub",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform/mul",
-                            "explore_agent/conv2d_1/kernel/Initializer/random_uniform", "explore_agent/conv2d_1/kernel",
-                            "explore_agent/conv2d_1/kernel/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d_1/kernel/Assign",
-                            "explore_agent/conv2d_1/kernel/Read/ReadVariableOp",
-                            "explore_agent/conv2d_1/bias/Initializer/zeros",
-                            "explore_agent/conv2d_1/bias",
-                            "explore_agent/conv2d_1/bias/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d_1/bias/Assign", "explore_agent/conv2d_1/bias/Read/ReadVariableOp",
-                            "explore_agent/conv2d_1/dilation_rate", "explore_agent/conv2d_1/Conv2D/ReadVariableOp",
-                            "explore_agent/conv2d_1/Conv2D", "explore_agent/conv2d_1/BiasAdd/ReadVariableOp",
-                            "explore_agent/conv2d_1/BiasAdd", "explore_agent/conv2d_1/Relu",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform/shape",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform/min",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform/max",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform/RandomUniform",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform/sub",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform/mul",
-                            "explore_agent/conv2d_2/kernel/Initializer/random_uniform", "explore_agent/conv2d_2/kernel",
-                            "explore_agent/conv2d_2/kernel/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d_2/kernel/Assign",
-                            "explore_agent/conv2d_2/kernel/Read/ReadVariableOp",
-                            "explore_agent/conv2d_2/bias/Initializer/zeros",
-                            "explore_agent/conv2d_2/bias",
-                            "explore_agent/conv2d_2/bias/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d_2/bias/Assign", "explore_agent/conv2d_2/bias/Read/ReadVariableOp",
-                            "explore_agent/conv2d_2/dilation_rate", "explore_agent/conv2d_2/Conv2D/ReadVariableOp",
-                            "explore_agent/conv2d_2/Conv2D", "explore_agent/conv2d_2/BiasAdd/ReadVariableOp",
-                            "explore_agent/conv2d_2/BiasAdd", "explore_agent/conv2d_2/Relu",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform/shape",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform/min",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform/max",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform/RandomUniform",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform/sub",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform/mul",
-                            "explore_agent/conv2d_3/kernel/Initializer/random_uniform", "explore_agent/conv2d_3/kernel",
-                            "explore_agent/conv2d_3/kernel/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d_3/kernel/Assign",
-                            "explore_agent/conv2d_3/kernel/Read/ReadVariableOp",
-                            "explore_agent/conv2d_3/bias/Initializer/zeros",
-                            "explore_agent/conv2d_3/bias",
-                            "explore_agent/conv2d_3/bias/IsInitialized/VarIsInitializedOp",
-                            "explore_agent/conv2d_3/bias/Assign", "explore_agent/conv2d_3/bias/Read/ReadVariableOp",
-                            "explore_agent/conv2d_3/dilation_rate", "explore_agent/conv2d_3/Conv2D/ReadVariableOp",
-                            "explore_agent/conv2d_3/Conv2D", "explore_agent/conv2d_3/BiasAdd/ReadVariableOp",
-                            "explore_agent/conv2d_3/BiasAdd", "explore_agent/Squeeze", "explore_agent/flatten/Shape",
-                            "explore_agent/pi_logic_outs",
-                            "explore_agent/flatten/Shape",
-                            "explore_agent/flatten/strided_slice/stack",
-                            "explore_agent/flatten/strided_slice/stack_1",
-                            "explore_agent/flatten/strided_slice/stack_2",
-                            "explore_agent/flatten/strided_slice",
-                            "explore_agent/flatten/Reshape/shape/1",
-                            "explore_agent/flatten/Reshape/shape",
-                            "explore_agent/flatten/Reshape",
-                            "explore_agent/dense/kernel/Initializer/Const",
-                            "explore_agent/dense/kernel",
-                            "explore_agent/dense/kernel/Assign",
-                            "explore_agent/dense/kernel/read",
-                            "explore_agent/dense/bias/Initializer/zeros",
-                            "explore_agent/dense/bias",
-                            "explore_agent/dense/bias/Assign",
-                            "explore_agent/dense/bias/read",
-                            "explore_agent/dense/MatMul",
-                            "explore_agent/dense/BiasAdd",
-                            "explore_agent/baseline",
-
-                            # "explore_agent/multinomial/Multinomial/num_samples",
-                            # "explore_agent/multinomial/Multinomial",
-                            # "explore_agent/out_action"
-                            ]
-
-        start_0 = time.time()
-
-        frozen_graph = graph_util.convert_variables_to_constants(self.sess, input_graph_def, output_names,
-                                                                 freeze_var_names)
-        with open(out_path, "wb") as f:
-            f.write(frozen_graph.SerializeToString())
-
-        interval_1 = time.time()
-        import tensorflow as tf
-        converter = tf.compat.v1.lite.TFLiteConverter.from_frozen_graph(
-            graph_def_file="/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.pb",
-            input_arrays=["state_input"],
-            output_arrays=["explore_agent/pi_logic_outs", "explore_agent/baseline"]
-            # output_arrays=["explore_agent/baseline"]
-        )
-        # converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        tflite_model = converter.convert()
-        with tf.io.gfile.GFile('/home/tank/dxa/xingtian_revise/impala_opt/user/data/model/imp25.tflite', 'wb') as f:
-            f.write(tflite_model)
-        interval_2 = time.time()
-        print("=============================================================")
-        print("freeze graph time: {:.2f}ms\nconvert time: {:.2f}ms".format((interval_1 - start_0)*1000, (interval_2-interval_1)*1000))
-        print("=============================================================")
 
     def load_model(self, model_name, by_name=False):
         """Load model with inference variables."""

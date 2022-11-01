@@ -109,31 +109,6 @@ class AtariImpalaOpt(CartpolePpo):
         return trajectory
 
     def sync_model(self):
-        block = True  # todo: test and latter can be set in yaml
-        if block:
-            return self.sync_model_()
-        else:
-            if not hasattr(self, "non_block_flag"):
-                setattr(self, "non_block_flag", True)
-                model_name = self.recv_explorer.recv(block=True)
-                return model_name
-            else:
-                model_name = None
-            self.sync_weights_count += 1
-            if self.sync_weights_count >= self.broadcast_weights_interval:
-                model_name = self.recv_explorer.recv(block=False)
-                if model_name is None:
-                    model_successor = self.recv_explorer.recv(block=False)
-                    while model_successor:
-                        if model_successor is not None:
-                            model_name = model_successor
-                        model_successor = self.recv_explorer.recv(block=False)
-
-                self.sync_weights_count = 0
-
-            return model_name
-
-    def sync_model_(self):
         """Block wait one [new] model when sync need."""
         model_name = None
         self.sync_weights_count += 1

@@ -38,8 +38,7 @@ from xt.framework.explorer import setup_explorer
 from zeus.common.util.logger import StatsRecorder, VERBOSITY_MAP
 from zeus.common.util.get_xt_config import parse_xt_multi_case_paras, \
     check_if_patch_local_node, get_pbt_set
-from xt.framework.compress_weights import CompressWeights, empty_weights_proc_func
-from multiprocessing import Process, Queue
+
 
 TRAIN_PROCESS_LIST = list()
 
@@ -48,7 +47,7 @@ def _makeup_learner(config_info, data_url, verbosity):
     """Make up a learner instance and build the relation with broker."""
     config_info = patch_alg_within_config(config_info.copy(), node_type="node_config")
 
-    _exp_params = pprint.pformat(config_info, indent=0, width=1, )
+    _exp_params = pprint.pformat(config_info, indent=0, width=1,)
     logging.info("init learner with:\n{}\n".format(_exp_params))
 
     controller = launch_broker(config_info, verbosity=verbosity)
@@ -63,11 +62,8 @@ def _makeup_learner(config_info, data_url, verbosity):
     else:
         metric_store, weights_store = None, None
 
-    # compress weight comm
-    shared_queue = [Queue(), Queue()]
-
     for _learner_id in range(pbt_size):
-        learner = setup_learner(config_info, eval_adapter, _learner_id, data_url, shared_queue=shared_queue)
+        learner = setup_learner(config_info, eval_adapter, _learner_id, data_url)
 
         controller.register("predict{}".format(learner.name), "send", learner.send_predict)
         learner.send_train = controller.register("train{}".format(learner.name), "send")
@@ -76,8 +72,8 @@ def _makeup_learner(config_info, data_url, verbosity):
         controller.register("recv_predict{}".format(learner.name), "recv", learner.send_broker_predict)
 
         # update the learner <--relationship--> explorer ids
-        eid_start = _learner_id * env_num
-        learner.explorer_ids = list(range(eid_start, eid_start + env_num)) if _use_pbt else None
+        eid_start = _learner_id*env_num
+        learner.explorer_ids = list(range(eid_start, eid_start+env_num)) if _use_pbt else None
 
         # add this learner into population.
         if _use_pbt:
@@ -90,13 +86,6 @@ def _makeup_learner(config_info, data_url, verbosity):
     # start learner, after the data within broker stabilization.
     controller.start()
     time.sleep(0.01)
-
-    # start compress weight
-    # todo: if need_compress_weight:
-    logging.info("========================Compress weight process start=========================")
-    compress_worker = CompressWeights(shared_queue=shared_queue)
-    compress_worker.register_weights_process_function(empty_weights_proc_func)
-    compress_worker.start()
 
     for _learner in controller.tasks:
         _learner.start()

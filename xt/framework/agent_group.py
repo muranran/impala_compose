@@ -271,7 +271,6 @@ class AgentGroup(object):
         # fixme: remove model name file, and make sense to multi-agent.
         if is_id:
             weights = self.buf_stub.get(weights)
-
             model_weights = {"data": weights}
         else:
             model_weights = {"data": weights}
@@ -283,14 +282,7 @@ class AgentGroup(object):
             # bytes, as the weights_id
             # list, as to keras.get_weights
             if isinstance(weights, (dict, bytes, list)):
-                try:
-                    alg.restore(model_weights=model_weights["data"])
-
-                except:
-                    logging.info("===================================\n"
-                                 "Weight:\n{}\n"
-                                 "===================================".format(list(weights.keys())[:10]))
-                    raise RuntimeError("debug...")
+                alg.restore(model_weights=model_weights["data"])
                 continue
             elif not model_weights["data"]:  # None, dummy model.
                 # buffer may return weights with None
@@ -404,7 +396,7 @@ class AgentGroup(object):
         feed_funcs = [agent.handel_predict_value for agent in self.agents]
         feed_inputs = list(zip(states, pred_vals))
 
-        batch_action = self.bot.do_multi_job(feed_funcs, feed_inputs)
+        batch_action =  self.bot.do_multi_job(feed_funcs, feed_inputs)
 
         # agent.id keep pace with the id within the environment.
         action_package = {_ag.id: v for _ag, v in zip(self.agents, batch_action)}
@@ -437,7 +429,6 @@ class AgentGroup(object):
         # 2) don't restore with special policy, likes IMPALA.
         if model_name:
             _start1 = time()
-            # print("======================YYYYYYYYYY=========================")
             self.restore(model_name)
             self.ag_stats.restore_model_time = time() - _start1
         return type(model_name)
