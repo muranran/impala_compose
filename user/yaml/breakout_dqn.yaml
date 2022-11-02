@@ -28,7 +28,7 @@ model_para:
     model_config: {
       'LR': 0.00015,
       }
-
+# pass
 env_num: 2
 benchmark:
   archive_root: ./logs1101
