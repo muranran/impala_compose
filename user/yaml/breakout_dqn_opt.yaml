@@ -29,6 +29,6 @@ model_para:
       'LR': 0.00015,
       }
 
-env_num: 2
+env_num: 4
 benchmark:
-  archive_root: ./logs1103
+  archive_root: ./logs1104
