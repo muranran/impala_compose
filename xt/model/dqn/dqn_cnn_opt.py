@@ -47,8 +47,6 @@ class DqnCnnOpt(XTModel):
         self.network = self.create_actor_model(model_info)
         self.target_network = self.create_actor_model(model_info)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-        # self.optimizer = Adam(lr=self.learning_rate, clipnorm=10.)
-        # self.loss = MSE
 
         self.v = self.network.outputs[0]
         self.target_v = self.target_network.outputs[0]
@@ -77,17 +75,6 @@ class DqnCnnOpt(XTModel):
             mean = Lambda(layer_normalize)(value)
             value = Lambda(layer_add)([adv, mean])
         model = Model(inputs=state, outputs=value)
-        # adam = Adam(lr=self.learning_rate, clipnorm=10.)
-        # model.compile(loss='mse', optimizer=adam)
-        # if model_info.get("summary"):
-        #     model.summary()
-
-        # self.infer_state = tf.placeholder(tf.uint8, name="infer_input",
-        #                                   shape=(None, ) + tuple(self.state_dim))
-        # self.infer_v = model(self.infer_state)
-        # self.actor_var = TFVariables([self.infer_v], self.sess)
-        #
-        # self.sess.run(tf.initialize_all_variables())
         return model
 
     def build_train_graph(self):
@@ -99,11 +86,7 @@ class DqnCnnOpt(XTModel):
                                      shape=self.v.shape)
 
         loss = tf.keras.losses.mean_squared_error(self.true_v, self.v)
-        # loss = MSE(self.true_v, self.v)
         self.loss = loss
-        # grads_and_vars = self.optimizer.apply_gradients(self.loss)
-        # grads_and_vars = self.optimizer.compute_gradients(self.loss)
-        # grads, var = zip(*grads_and_vars)
         self.train_op = self.optimizer.minimize(loss)
 
     def build_infer_graph(self):
