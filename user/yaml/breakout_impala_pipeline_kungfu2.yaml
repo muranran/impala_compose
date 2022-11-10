@@ -1,5 +1,5 @@
 alg_para:
-  alg_name: IMPALAOpt
+  alg_name: IMPALAOptLite
   alg_config:
     train_per_checkpoint: 1
     prepare_times_per_train: 1
@@ -46,9 +46,9 @@ model_para:
 #        peers:
 #      self:
 #        rank:
-    backend: tflite
+    backend: bolt #tf, tflite, bolt
 
 benchmark:
-  archive_root: ./logs
+  archive_root: ./logs1106
   id: PIPELINE_SLEEP(s4_t1_la)_Bolt_NonBlock
 

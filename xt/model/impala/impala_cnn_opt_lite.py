@@ -613,12 +613,16 @@ class ImpalaCnnOptLite(XTModel):
             # weights = weights["weight"]
             self.actor_var.set_weights(weights)
 
-    def get_weights(self):
+    def get_weights(self, backend="default"):
         """Get weights."""
-        if self.backend == "tf" or self.backend == "tensorflow":
+        if backend == "default":
+            backend = self.backend
+
+        if backend == "tf" or backend == "tensorflow":
             with self.graph.as_default():
                 return self.actor_var.get_weights()
-        elif self.backend == "bolt" or self.backend == "tflite":
+
+        elif backend == "bolt" or backend == "tflite":
             if not hasattr(self, "model_num"):
                 setattr(self, "model_num", 0)
             else:

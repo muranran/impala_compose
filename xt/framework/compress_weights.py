@@ -74,7 +74,7 @@ class CompressWeights:
                 try:
                     start_0 = time()
 
-                    compress_weight_ = exp2_p_f(raw_weight)
+                    compress_weight_ = compress_tool(raw_weight)
                     # compress_weight_ = None
 
                     compress_time = time() - start_0
@@ -211,8 +211,8 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
 
     # print("===================CONVERTER 0 ===================")
     converter = tf.lite.TFLiteConverter.from_session(sess, [x], [y, z])
-    converter.inference_input_type = tf.uint8
-    converter.quantized_input_stats = {'state_input': (128, 127)}
+    # converter.inference_input_type = tf.uint8
+    # converter.quantized_input_stats = {'state_input': (128, 127)}
     # print("===================CONVERTER 1 ===================")
     tflite_model = converter.convert()
     # print("===================CONVERTER C ===================")
@@ -292,7 +292,10 @@ def exp3_p_f(config_: Dict):
     tflite_file = exp2_p_f(config_)
     config_.update({"tflite_file": tflite_file})
     config_.update(default_config)
-    bolt_file = save_tflite_as_bolt(config_)
+    bolt_file = save_tflite_as_bolt(config_)  # type:str
+    assert bolt_file.endswith(".bolt"), bolt_file
+    # from termcolor import colored
+    # print(colored("{}".format(bolt_file), "red"))
     return bolt_file
 
 
