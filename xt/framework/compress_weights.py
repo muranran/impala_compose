@@ -183,7 +183,8 @@ def save_as_tflite(pb_file: str, input_names: List[str], output_names: List[str]
     return tflite_file
 
 
-def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names: List[str], save_path: str):
+def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names: List[str], save_path: str,
+                              new_batch_size=3):
     with GFile(pb_file, "rb") as f:
         graph_def = GraphDef()
         graph_def.ParseFromString(f.read())
@@ -195,7 +196,7 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
                          name=""
                          )
     g = gde.Graph(graph.as_graph_def())
-    gde.rewrite.change_batch_size(g, new_size=3, inputs=[g["state_input"]])
+    gde.rewrite.change_batch_size(g, new_size=new_batch_size, inputs=[g["state_input"]])
 
     graph_revised = g.to_graph_def()
     with Graph().as_default() as graph_r:
@@ -211,6 +212,7 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
 
     # print("===================CONVERTER 0 ===================")
     converter = tf.lite.TFLiteConverter.from_session(sess, [x], [y, z])
+
     # converter.inference_input_type = tf.uint8
     # converter.quantized_input_stats = {'state_input': (128, 127)}
     # print("===================CONVERTER 1 ===================")
@@ -274,10 +276,13 @@ def exp2_p_f(config_: Dict):
     input_names = config_.get("input_names")
     output_names = config_.get("output_names")
     save_path = config_.get("save_path")
+    resize_batch_size = config_.get("resize_batch_size", 3)
+    # fixme: experimental revise
+    resize_batch_size = 1
 
     # tflite_file = save_as_tflite(pb_file, input_names, output_names, save_path)
     try:
-        tflite_file = save_as_tflite_resize_fix(pb_file, input_names, output_names, save_path)
+        tflite_file = save_as_tflite_resize_fix(pb_file, input_names, output_names, save_path, resize_batch_size)
     except:
         logging.info("=======================FLAG ENCOUNTER BUG=================================")
         raise RuntimeError("UNKNOWN BUG")

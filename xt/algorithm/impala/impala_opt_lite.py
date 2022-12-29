@@ -156,3 +156,4 @@ class IMPALAOptLite(Algorithm):
         """Get the actor model weights as default."""
         self.fp32_actor.set_tf_weights(self.actor.get_weights("tf"))
         return self.fp32_actor.get_weights()
+        # return self.actor.get_weights()
