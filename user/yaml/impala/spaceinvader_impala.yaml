@@ -1,15 +1,15 @@
 alg_para:
   alg_name: IMPALAOpt
-  alg_config: 
+  alg_config:
     train_per_checkpoint: 1
     prepare_times_per_train: 1
     BATCH_SIZE: 512
-
-
+    
 env_para:
   env_name: VectorAtariEnv
   env_info: 
-    name: BreakoutNoFrameskip-v4
+    name: SpaceInvadersNoFrameskip-v4
+    dim: 84
     vision: False
     vector_env_size: 1
 
@@ -19,15 +19,17 @@ agent_para:
   agent_config:
     max_steps: 128
     complete_step: 10020000
+    sync_model_interval: 1
+    
 
 model_para:
   actor:
     model_name: ImpalaCnnOpt
     state_dim: [84,84,4]
-    input_dtype: uint8 #uint8
+    input_dtype: uint8
     state_mean: 0.0
     state_std: 255.0
-    action_dim: 4
+    action_dim: 6
     model_config:
       LR: 0.0005
       sample_batch_step: 128
@@ -35,6 +37,3 @@ model_para:
 
 env_num: 32
 speedup: True
-benchmark:
-  archive_root: ./logs1011
-  id: breakout_impala
