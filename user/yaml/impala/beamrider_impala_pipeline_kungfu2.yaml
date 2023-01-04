@@ -13,6 +13,10 @@ env_para:
     vector_env_size: 5
     size: 5
     wait_num: 3
+    name: BeamRiderNoFrameskip-v4
+    vision: False
+    dim: 84
+    vector_env_size: 1
 
 env_num: 12
 group_num: 4

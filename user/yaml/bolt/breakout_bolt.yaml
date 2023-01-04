@@ -10,13 +10,13 @@ env_para:
   env_info:
     name: BreakoutNoFrameskip-v4
     vision: False
-    vector_env_size: 5
-    size: 5
-    wait_num: 3
+    vector_env_size: 1
+    size: 1
+    wait_num: 1
 
-env_num: 12
-group_num: 4
-speedup: 3
+env_num: 20
+group_num: 1
+speedup: 1
 compress: True
 
 
@@ -46,10 +46,10 @@ model_para:
 #        peers:
 #      self:
 #        rank:
-    backend: bolt #tf, tflite, bolt
+    backend: tflite #tf, tflite, bolt
 #    backend: tflite
 
 benchmark:
-  archive_root: ./logs1106
-  id: PIPELINE_SLEEP(s4_t1_la)_Bolt_NonBlock
+  archive_root: ./xt_archive/exp2/impala
+  id: breakout_bolt
 

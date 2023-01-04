@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="7300d793-72e1-4652-8f23-018ac0271542" name="192.168.1.140">
+        <fileTransfer accessType="SFTP" host="192.168.1.140" port="22" sshConfigId="99d98d85-b71a-4d6f-9fae-3b37321ddf04" sshConfig="sshConfig://root@192.168.1.140:22 password/home/tank/miniconda3/envs/qt/bin/python">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

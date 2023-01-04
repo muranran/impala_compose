@@ -84,6 +84,17 @@ class ImpalaCnnOptLite(XTModel):
         self.sta_mean = model_info.get("state_mean", 0.)
         self.sta_std = model_info.get("state_std", 255.)
 
+        # def state_transform2(x, mean=1e-5, std=255., input_dtype="float32"):
+        #     """Normalize data."""
+        #     # if input_dtype in ("float32", "float", "float64"):
+        #     #     return x
+        #
+        #     # only cast non-float32 state
+        #     if np.abs(mean) < 1e-4:
+        #         return tf.cast(x, dtype='float32') / std
+        #     else:
+        #         return (tf.cast(x, dtype="float32") - mean) / std
+
         self._transform = partial(state_transform,
                                   mean=self.sta_mean,
                                   std=self.sta_std,
@@ -320,10 +331,19 @@ class ImpalaCnnOptLite(XTModel):
         if self.backend == "tf" or self.backend == "tensorflow":
             return self.predict_(state)
 
-        if self.input_dtype == "float32":
-            state = [s.astype(np.float32) for s in state]
-        else:
-            state = [s.astype(np.uint8) for s in state]
+        # if self.input_dtype == "float32":
+        #     state = [s.astype(np.float32) for s in state]
+        # else:
+        #     state = [s.astype(np.uint8) for s in state]
+
+        def state_transform2(x, mean=1e-5, std=255., input_dtype="float32"):
+            if np.abs(mean) < 1e-4:
+                return x.astype(np.float32) / std
+            else:
+                return (x.astype(np.float32) - mean) / std
+
+        state = [state_transform2(s, self.sta_mean, self.sta_std) for s in state]
+
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
         # state = [np.zeros((84, 84, 4), dtype=np.float32) for i in range(5)]
@@ -428,7 +448,7 @@ class ImpalaCnnOptLite(XTModel):
         # update interpreter info
         self.bolt_interpreter = {
             "interpreter": bolt_interpreter,
-            "input_shape": (3, 4, 84, 84),
+            "input_shape": (1, 4, 84, 84),  # fixme: experimental revise | pipeline 3 | default 1
             "pi_logic_outs_index": 1,
             "baseline_index": 0,
         }
