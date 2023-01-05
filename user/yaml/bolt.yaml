@@ -45,7 +45,7 @@ model_para:
     #        peers:
     #      self:
     #        rank:
-    backend: tflite #tf, tflite, bolt
+    backend: tf #tf, tflite, bolt
     inference_batchsize: 1
 #    backend: tflite
 
