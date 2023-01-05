@@ -11,10 +11,11 @@
             "program": "xt/main.py",
             "args": [
                 "-f",
-                "${workspaceFolder}/user/yaml/bolt.yaml"
+                "${workspaceFolder}/user/yaml/pipeline/impala_pipeline_bolt_breakout.yaml"
             ],
             "console": "integratedTerminal",
             "justMyCode": true
         }
     ]
+    // fuser -v /dev/nvidia* 
 }

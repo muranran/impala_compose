@@ -8,11 +8,12 @@ alg_para:
 env_para:
   env_name: EnvPool
   env_info:
-    name: BreakoutNoFrameskip-v4
+    name: BeamRiderNoFrameskip-v4
     vision: False
     vector_env_size: &vector_env_size 1
     size: 1
     wait_num: 1
+    dim: 84
 
 env_num: 20
 group_num: 1
@@ -33,7 +34,7 @@ model_para:
     input_dtype: uint8 # default is uint8
     state_mean: 0.0
     state_std: 255.0
-    action_dim: 4
+    action_dim: 9
     model_config:
       LR: 0.0015
       sample_batch_step: 160
@@ -51,4 +52,4 @@ model_para:
 
 benchmark:
   archive_root: ./xt_archive/exp2/impala
-  id: impala_bolt
+  id: impala_bolt_beamrider
