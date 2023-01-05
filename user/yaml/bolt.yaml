@@ -19,10 +19,9 @@ group_num: 1
 speedup: 1
 compress: True
 
-
 agent_para:
   agent_name: AtariImpalaOpt
-  agent_num : 1
+  agent_num: 1
   agent_config:
     max_steps: 160
     complete_step: 30020000
@@ -30,7 +29,7 @@ agent_para:
 model_para:
   actor:
     model_name: ImpalaCnnOptLite
-    state_dim: [84,84,4]
+    state_dim: [84, 84, 4]
     input_dtype: uint8 # default is uint8
     state_mean: 0.0
     state_std: 255.0
@@ -40,16 +39,16 @@ model_para:
       sample_batch_step: 160
       grad_norm_clip: 40.0
 
-#      gpu_nums: 1
-#    gpu_config:
-#      cluster:
-#        peers:
-#      self:
-#        rank:
+    #      gpu_nums: 1
+    #    gpu_config:
+    #      cluster:
+    #        peers:
+    #      self:
+    #        rank:
     backend: tflite #tf, tflite, bolt
+    inference_batchsize: 1
 #    backend: tflite
 
 benchmark:
   archive_root: ./logs1227
   id: impala_bolt
-
