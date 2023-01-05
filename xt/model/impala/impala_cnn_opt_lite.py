@@ -343,11 +343,6 @@ class ImpalaCnnOptLite(XTModel):
         if self.backend == "tf" or self.backend == "tensorflow":
             return self.predict_(state)
 
-        # if self.input_dtype == "float32":
-        #     state = [s.astype(np.float32) for s in state]
-        # else:
-        #     state = [s.astype(np.uint8) for s in state]
-
         def state_transform2(x, mean=1e-5, std=255., input_dtype="float32"):
             if np.abs(mean) < 1e-4:
                 return x.astype(np.float32) / std
@@ -359,8 +354,7 @@ class ImpalaCnnOptLite(XTModel):
 
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
-        # state = [np.zeros((84, 84, 4), dtype=np.float32) for i in range(5)]
-        # real_batch_size = 5
+
         if real_batch_size > batch_size:
             state_zero = np.zeros(state[0].shape, dtype=np.float32)
             num_predict = real_batch_size // batch_size
@@ -376,12 +370,13 @@ class ImpalaCnnOptLite(XTModel):
             for s in state_batch_resize:
                 try:
                     p, b = self.inference(s)
-                    # pt, bt = self.invoke(s)
+                    # extra_p, extra_b = self.extra_inference(s)
+
                     # logging.info("======================================\n"
                     #              "tflite result:\n{}\n"
                     #              "bolt result:\n{}\n"
                     #              "======================================\n"
-                    #              .format((pt, bt), (pb, bb)))
+                    #              .format((p, b), (extra_p, extra_b)))
                     #
                     # p = pt
                     # b = bt
@@ -396,12 +391,13 @@ class ImpalaCnnOptLite(XTModel):
             # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
         elif real_batch_size == batch_size:
             pi_logic_outs, baseline = self.inference(state)
-            # pt, bt = self.invoke(state)
-            # logging.info("======================================\n"
-            #              "tflite result:\n{}\n"
-            #              "bolt result:\n{}\n"
-            #              "======================================\n"
-            #              .format((pt, bt), (pi_logic_outs, baseline)))
+
+            extra_p, extra_b = self.extra_inference(state)
+            logging.info("======================================\n"
+                         "tflite result:\n{}\n"
+                         "bolt result:\n{}\n"
+                         "======================================\n"
+                         .format((pi_logic_outs, baseline), (extra_p, extra_b)))
 
             # pi_logic_outs = pt
             # baseline = bt
@@ -675,7 +671,7 @@ class ImpalaCnnOptLite(XTModel):
         restore_tf_variable(self.sess, self.explore_paras, model_name)
 
     def set_weights(self, weights):
-        if self.backend == "bolt":
+        if self.backend == "bolt_":
             if isinstance(weights, str):
                 if weights.endswith(".bolt"):
                     self.inference = self.invoke_bolt
@@ -701,6 +697,25 @@ class ImpalaCnnOptLite(XTModel):
 
         elif self.backend == "tf" or self.backend == "tensorflow":
             self.set_tf_weights(weights)
+
+        elif self.backend == "bolt":
+            if isinstance(weights, str):
+                if weights.endswith(".bolt"):
+                    self.inference = self.invoke_tflite
+                    self.extra_inference = self.invoke_bolt
+                    self.set_bolt_weight(weights)
+                    result = re.search(
+                        "model_([0-9]+[0-9]*).*?(\.[a-z]*)", weights)
+                    tflite_weights = "model_{}.tflite".format(result.group(1))
+                    tflite_weights = weights.replace(result.group(0), tflite_weights)
+                    self.set_tflite_weights(tflite_weights)
+                    self.interpreter = self.tflite_interpreter
+                    self.extra_interpreter = self.bolt_interpreter
+                else:
+                    raise TypeError(
+                        "{} doesn't end with .tflite".format(weights))
+            else:
+                raise TypeError("{} is not path-like".format(weights))
 
         else:
             raise NotImplementedError(
