@@ -84,6 +84,17 @@ class ImpalaCnnOptLite(XTModel):
         self.sta_mean = model_info.get("state_mean", 0.)
         self.sta_std = model_info.get("state_std", 255.)
 
+        # def state_transform2(x, mean=1e-5, std=255., input_dtype="float32"):
+        #     """Normalize data."""
+        #     # if input_dtype in ("float32", "float", "float64"):
+        #     #     return x
+        #
+        #     # only cast non-float32 state
+        #     if np.abs(mean) < 1e-4:
+        #         return tf.cast(x, dtype='float32') / std
+        #     else:
+        #         return (tf.cast(x, dtype="float32") - mean) / std
+
         self._transform = partial(state_transform,
                                   mean=self.sta_mean,
                                   std=self.sta_std,
@@ -119,6 +130,7 @@ class ImpalaCnnOptLite(XTModel):
 
         self.bolt_interpreter = None
         self.backend = model_info.get("backend", "tf")
+        self.inference_batchsize = model_info.get("inference_batchsize", 1)
 
         super().__init__(model_info)
 
@@ -151,7 +163,8 @@ class ImpalaCnnOptLite(XTModel):
             )(last_layer)
 
             self.pi_logic_outs = tf.squeeze(
-                Conv2D(self.action_dim, (1, 1), padding="same")(convolution_layer),
+                Conv2D(self.action_dim, (1, 1), padding="same")(
+                    convolution_layer),
                 axis=[1, 2],
                 name="pi_logic_outs"
             )
@@ -168,7 +181,8 @@ class ImpalaCnnOptLite(XTModel):
                 name="baseline",
             )
             self.out_actions = tf.squeeze(
-                tf.multinomial(self.pi_logic_outs, num_samples=1, output_dtype=tf.int32),
+                tf.multinomial(self.pi_logic_outs, num_samples=1,
+                               output_dtype=tf.int32),
                 1,
                 name="out_action",
             )
@@ -177,9 +191,11 @@ class ImpalaCnnOptLite(XTModel):
         self.ph_bp_logic_outs = tf.placeholder(self.dtype, shape=(None, self.action_dim),
                                                name="ph_b_logits")
 
-        self.ph_actions = tf.placeholder(tf.int32, shape=(None,), name="ph_action")
+        self.ph_actions = tf.placeholder(
+            tf.int32, shape=(None,), name="ph_action")
         self.ph_dones = tf.placeholder(tf.bool, shape=(None,), name="ph_dones")
-        self.ph_rewards = tf.placeholder(self.dtype, shape=(None,), name="ph_rewards")
+        self.ph_rewards = tf.placeholder(
+            self.dtype, shape=(None,), name="ph_rewards")
 
         # Split the tensor into batches at known episode cut boundaries.
         # [batch_count * batch_step] -> [batch_step, batch_count]
@@ -189,7 +205,8 @@ class ImpalaCnnOptLite(XTModel):
             batch_count = tf.shape(tensor)[0] // batch_step
             reshape_tensor = tf.reshape(
                 tensor,
-                tf.concat([[batch_count, batch_step], tf.shape(tensor)[1:]], axis=0),
+                tf.concat([[batch_count, batch_step],
+                          tf.shape(tensor)[1:]], axis=0),
             )
 
             # swap B and T axes
@@ -206,8 +223,10 @@ class ImpalaCnnOptLite(XTModel):
             bp_logic_outs=split_batches(self.ph_bp_logic_outs, drop_last=True),
             tp_logic_outs=split_batches(self.pi_logic_outs, drop_last=True),
             actions=split_batches(self.ph_actions, drop_last=True),
-            discounts=split_batches(tf.cast(~self.ph_dones, tf.float32) * GAMMA, drop_last=True),
-            rewards=split_batches(tf.clip_by_value(self.ph_rewards, -1, 1), drop_last=True),
+            discounts=split_batches(
+                tf.cast(~self.ph_dones, tf.float32) * GAMMA, drop_last=True),
+            rewards=split_batches(tf.clip_by_value(
+                self.ph_rewards, -1, 1), drop_last=True),
             values=split_batches(self.baseline, drop_last=True),
             bootstrap_value=split_batches(self.baseline)[-1],
         )
@@ -220,7 +239,8 @@ class ImpalaCnnOptLite(XTModel):
                 learning_rate = LR
             optimizer = AdamOptimizer(learning_rate)
         elif self.opt_type == "rmsprop":
-            optimizer = tf.train.RMSPropOptimizer(LR, decay=0.99, epsilon=0.1, centered=True)
+            optimizer = tf.train.RMSPropOptimizer(
+                LR, decay=0.99, epsilon=0.1, centered=True)
         else:
             raise KeyError("invalid opt_type: {}".format(self.opt_type))
 
@@ -231,7 +251,8 @@ class ImpalaCnnOptLite(XTModel):
         grads, _ = tf.clip_by_global_norm(grads, self.grad_norm_clip)
         clipped_gvs = list(zip(grads, var))
 
-        self.train_op = optimizer.apply_gradients(clipped_gvs, global_step=global_step)
+        self.train_op = optimizer.apply_gradients(
+            clipped_gvs, global_step=global_step)
 
         # fixme: help to show the learning rate among training processing
         self.lr = optimizer._lr
@@ -244,7 +265,8 @@ class ImpalaCnnOptLite(XTModel):
             tf.GraphKeys.TRAINABLE_VARIABLES,
             scope="explore_agent")
 
-        self.saver = Saver({t.name: t for t in self.explore_paras}, max_to_keep=self.max_to_keep)
+        self.saver = Saver(
+            {t.name: t for t in self.explore_paras}, max_to_keep=self.max_to_keep)
 
         return True
 
@@ -313,28 +335,34 @@ class ImpalaCnnOptLite(XTModel):
 
     def save_model(self, file_name):
         """Save model without meta graph."""
-        ck_name = self.saver.save(self.sess, save_path=file_name, write_meta_graph=False)
+        ck_name = self.saver.save(
+            self.sess, save_path=file_name, write_meta_graph=False)
         return ck_name
 
     def predict(self, state):
         if self.backend == "tf" or self.backend == "tensorflow":
             return self.predict_(state)
 
-        if self.input_dtype == "float32":
-            state = [s.astype(np.float32) for s in state]
-        else:
-            state = [s.astype(np.uint8) for s in state]
+        def state_transform2(x, mean=1e-5, std=255., input_dtype="float32"):
+            if np.abs(mean) < 1e-4:
+                return x.astype(np.float32) / std
+            else:
+                return (x.astype(np.float32) - mean) / std
+
+        state = [state_transform2(s, self.sta_mean, self.sta_std)
+                 for s in state]
+
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
-        # state = [np.zeros((84, 84, 4), dtype=np.float32) for i in range(5)]
-        # real_batch_size = 5
+
         if real_batch_size > batch_size:
             state_zero = np.zeros(state[0].shape, dtype=np.float32)
             num_predict = real_batch_size // batch_size
             rest_num = real_batch_size % batch_size
             state_batch_resize = []
             for i in range(num_predict):
-                state_batch_resize.append(state[i * batch_size: (i + 1) * batch_size])
+                state_batch_resize.append(
+                    state[i * batch_size: (i + 1) * batch_size])
             state_batch_resize.append(
                 [*state[num_predict * batch_size:], *[state_zero for i in range(batch_size - rest_num)]])
             pi_logic_outs = []
@@ -342,31 +370,34 @@ class ImpalaCnnOptLite(XTModel):
             for s in state_batch_resize:
                 try:
                     p, b = self.inference(s)
-                    # pt, bt = self.invoke(s)
+                    # extra_p, extra_b = self.extra_inference(s)
+
                     # logging.info("======================================\n"
                     #              "tflite result:\n{}\n"
                     #              "bolt result:\n{}\n"
                     #              "======================================\n"
-                    #              .format((pt, bt), (pb, bb)))
+                    #              .format((p, b), (extra_p, extra_b)))
                     #
                     # p = pt
                     # b = bt
                     pi_logic_outs.extend(p)
                     baseline.extend(b)
                 except ValueError as err:
-                    raise ValueError(err.args + ("| {} | {}".format((len(p), len(b)), (p, b)),))
+                    raise ValueError(
+                        err.args + ("| {} | {}".format((len(p), len(b)), (p, b)),))
             # print(pi_logic_outs, baseline)
             pi_logic_outs = pi_logic_outs[:real_batch_size]
             baseline = baseline[:real_batch_size]
             # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
         elif real_batch_size == batch_size:
             pi_logic_outs, baseline = self.inference(state)
-            # pt, bt = self.invoke(state)
-            # logging.info("======================================\n"
-            #              "tflite result:\n{}\n"
-            #              "bolt result:\n{}\n"
-            #              "======================================\n"
-            #              .format((pt, bt), (pi_logic_outs, baseline)))
+
+            extra_p, extra_b = self.extra_inference(state)
+            logging.info("======================================\n"
+                         "tflite result:\n{}\n"
+                         "bolt result:\n{}\n"
+                         "======================================\n"
+                         .format((pi_logic_outs, baseline), (extra_p, extra_b)))
 
             # pi_logic_outs = pt
             # baseline = bt
@@ -382,9 +413,11 @@ class ImpalaCnnOptLite(XTModel):
             return probs
 
         try:
-            actions = np.asarray([np.argmax(np.random.multinomial(1, softmax(plo))) for plo in pi_logic_outs])
+            actions = np.asarray(
+                [np.argmax(np.random.multinomial(1, softmax(plo))) for plo in pi_logic_outs])
         except ValueError as err:
-            print("pi_logic_outs:\n{}\nmay contains negative.{}".format(pi_logic_outs, err))
+            print("pi_logic_outs:\n{}\nmay contains negative.{}".format(
+                pi_logic_outs, err))
             actions = np.random.randint(0, 4, (len(pi_logic_outs),))
             pi_logic_outs = np.zeros(shape=np.asarray(pi_logic_outs).shape)
         at = time.time() - t0
@@ -421,33 +454,102 @@ class ImpalaCnnOptLite(XTModel):
             sys.path.append(module_path)
             import batch_infer as bolt
         except ModuleNotFoundError as err:
-            raise ModuleNotFoundError("bolt module not found under path:{}".format(module_path))
+            raise ModuleNotFoundError(
+                "bolt module not found under path:{}".format(module_path))
         bolt_interpreter = bolt.Dog.get_instance()
         bolt_interpreter.prepare(bolt_model_path)
 
         # update interpreter info
         self.bolt_interpreter = {
             "interpreter": bolt_interpreter,
-            "input_shape": (3, 4, 84, 84),
+            # fixme: experimental revise | pipeline 3 | default 1
+            "input_shape": (1, 4, 84, 84),
             "pi_logic_outs_index": 1,
             "baseline_index": 0,
+        }
+
+    def create_bolt_interpreter_fix(self, bolt_model_path):
+        # Load the bolt model and allocate tensors.
+        module_path = "/home/data/cypo/bolt"
+        try:
+            sys.path.append(module_path)
+            import bolt_python_interface as bolt
+        except ModuleNotFoundError as err:
+            raise ModuleNotFoundError(
+                "bolt module not found under path:{}".format(module_path))
+        bolt_interpreter = bolt.BoltModelWrapper.get_instance()
+        bolt_interpreter.prepare(
+            bolt_model_path, self.inference_batchsize, self.action_dim)
+
+        # update interpreter info
+        self.bolt_interpreter = {
+            "interpreter": bolt_interpreter,
+            # fixme: experimental revise | pipeline 3 | default 1
+            "input_shape": (self.inference_batchsize, 4, 84, 84),
+            "pi_logic_outs_index": 1,
+            "baseline_index": 0,
+        }
+
+    def create_bolt_interpreter_xys(self, bolt_model_path):
+        # Load the bolt model and allocate tensors.
+        module_path = "/home/data/cypo/bolt"
+        try:
+            sys.path.append(module_path)
+            import xys_bolt_python_interface as bolt
+        except ModuleNotFoundError as err:
+            raise ModuleNotFoundError(
+                "bolt module not found under path:{}".format(module_path))
+        bolt_interpreter = bolt.Dog.get_instance()
+        bolt_interpreter.prepare(bolt_model_path, self.inference_batchsize)
+
+        # update interpreter info
+        self.bolt_interpreter = {
+            "interpreter": bolt_interpreter,
+            # fixme: experimental revise | pipeline 3 | default 1
+            "input_shape": (self.inference_batchsize, 4, 84, 84),
+            "pi_logic_outs_index": 1,
+            "baseline_index": 0,
+            "bolt_config": np.array([1, self.action_dim]).astype(np.float64)
         }
 
     def invoke_tflite(self, state):
         input_data = state
         interpreter = self.tflite_interpreter["interpreter"]
-        interpreter.set_tensor(self.tflite_interpreter["input_index"], input_data)
+        interpreter.set_tensor(
+            self.tflite_interpreter["input_index"], input_data)
         interpreter.invoke()
-        pi_logic_outs = interpreter.get_tensor(self.tflite_interpreter["pi_logic_outs_index"])
-        baseline = interpreter.get_tensor(self.tflite_interpreter["baseline_index"])
+        pi_logic_outs = interpreter.get_tensor(
+            self.tflite_interpreter["pi_logic_outs_index"])
+        baseline = interpreter.get_tensor(
+            self.tflite_interpreter["baseline_index"])
         return pi_logic_outs.tolist(), baseline.tolist()
 
     def invoke_bolt(self, state):
-        input_data = np.expand_dims(np.transpose(np.array(state), (0, 3, 1, 2)).flatten(), 1)
+        input_data = np.expand_dims(np.transpose(
+            np.array(state), (0, 3, 1, 2)).flatten(), 1)
         interpreter = self.bolt_interpreter["interpreter"]
         interpreter.inference(input_data)
-        pi_logic_outs = interpreter.get_result(self.bolt_interpreter["pi_logic_outs_index"])
-        baseline = interpreter.get_result(self.bolt_interpreter["baseline_index"])
+        pi_logic_outs = interpreter.get_result(
+            self.bolt_interpreter["pi_logic_outs_index"])
+        baseline = interpreter.get_result(
+            self.bolt_interpreter["baseline_index"])
+
+        # time.sleep(0.002)
+
+        return pi_logic_outs.tolist(), baseline.tolist()
+
+    def invoke_bolt_xys(self, state):
+        input_data = np.expand_dims(np.transpose(
+            np.array(state), (0, 3, 1, 2)).flatten(), 1)
+        result = np.zeros(
+            5, self.inference_batchsize).flatten().astype(np.float64)
+        interpreter = self.bolt_interpreter["interpreter"]
+        interpreter.inference(input_data, result,
+                              self.bolt_interpreter["bolt_config"])
+        pi_logic_outs = result[0:state.shape[0]].reshape(
+            state.shape[0], 1).astype(np.float32)
+        baseline = result[self.infer_batch: self.infer_batch + state.shape[0] *
+                          self.action_dim].reshape(state.shape[0], self.action_dim).astype(np.float32)
 
         # time.sleep(0.002)
 
@@ -458,7 +560,8 @@ class ImpalaCnnOptLite(XTModel):
             out_path = save_path
         else:
             out_path = os.path.join(save_path, "model.pb")
-        output_names = ["explore_agent/pi_logic_outs", "explore_agent/baseline"]
+        output_names = ["explore_agent/pi_logic_outs",
+                        "explore_agent/baseline"]
         input_graph_def = self.graph.as_graph_def()
         freeze_var_names = ["state_input", "explore_agent/lambda/Cast", "explore_agent/lambda/truediv/y",
                             "explore_agent/lambda/truediv",
@@ -568,14 +671,15 @@ class ImpalaCnnOptLite(XTModel):
         restore_tf_variable(self.sess, self.explore_paras, model_name)
 
     def set_weights(self, weights):
-        if self.backend == "bolt":
+        if self.backend == "bolt_":
             if isinstance(weights, str):
                 if weights.endswith(".bolt"):
                     self.inference = self.invoke_bolt
                     self.set_bolt_weight(weights)
                     self.interpreter = self.bolt_interpreter
                 else:
-                    raise TypeError("{} doesn't end with .bolt".format(weights))
+                    raise TypeError(
+                        "{} doesn't end with .bolt".format(weights))
             else:
                 raise TypeError("{} is not path-like".format(weights))
 
@@ -586,28 +690,52 @@ class ImpalaCnnOptLite(XTModel):
                     self.set_tflite_weights(weights)
                     self.interpreter = self.tflite_interpreter
                 else:
-                    raise TypeError("{} doesn't end with .tflite".format(weights))
+                    raise TypeError(
+                        "{} doesn't end with .tflite".format(weights))
             else:
                 raise TypeError("{} is not path-like".format(weights))
 
         elif self.backend == "tf" or self.backend == "tensorflow":
             self.set_tf_weights(weights)
 
+        elif self.backend == "bolt":
+            if isinstance(weights, str):
+                if weights.endswith(".bolt"):
+                    self.inference = self.invoke_tflite
+                    self.extra_inference = self.invoke_bolt
+                    self.set_bolt_weight(weights)
+                    result = re.search(
+                        "model_([0-9]+[0-9]*).*?(\.[a-z]*)", weights)
+                    tflite_weights = "model_{}.tflite".format(result.group(1))
+                    tflite_weights = weights.replace(result.group(0), tflite_weights)
+                    self.set_tflite_weights(tflite_weights)
+                    self.interpreter = self.tflite_interpreter
+                    self.extra_interpreter = self.bolt_interpreter
+                else:
+                    raise TypeError(
+                        "{} doesn't end with .tflite".format(weights))
+            else:
+                raise TypeError("{} is not path-like".format(weights))
+
         else:
-            raise NotImplementedError("{} has not been implemented".format(self.backend))
+            raise NotImplementedError(
+                "{} has not been implemented".format(self.backend))
 
     def set_tflite_weights(self, weights):
-        logging.info("====================Create TFLite Interpreter======================")
+        logging.info(
+            "====================Create TFLite Interpreter======================")
         self.create_tflite_interpreter(weights)
 
     def set_bolt_weight(self, weights):
-        logging.info("====================Create Bolt Interpreter======================")
-        self.create_bolt_interpreter(weights)
+        logging.info(
+            "====================Create Bolt Interpreter======================")
+        self.create_bolt_interpreter_fix(weights)
 
     def set_tf_weights(self, weights):
         """Set weight with memory tensor."""
         with self.graph.as_default():
-            logging.info("====================Create TF Interpreter======================")
+            logging.info(
+                "====================Create TF Interpreter======================")
             # order = weights["order"]
             # logging.info("=====================P {} Use Weight {}========================".format(os.getpid(), order))
             # weights = weights["weight"]

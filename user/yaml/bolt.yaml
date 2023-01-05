@@ -10,19 +10,18 @@ env_para:
   env_info:
     name: BreakoutNoFrameskip-v4
     vision: False
-    vector_env_size: 5
-    size: 5
-    wait_num: 3
+    vector_env_size: 1
+    size: 1
+    wait_num: 1
 
-env_num: 12
-group_num: 4
-speedup: 3
+env_num: 20
+group_num: 1
+speedup: 1
 compress: True
-
 
 agent_para:
   agent_name: AtariImpalaOpt
-  agent_num : 1
+  agent_num: 1
   agent_config:
     max_steps: 160
     complete_step: 30020000
@@ -30,7 +29,7 @@ agent_para:
 model_para:
   actor:
     model_name: ImpalaCnnOptLite
-    state_dim: [84,84,4]
+    state_dim: [84, 84, 4]
     input_dtype: uint8 # default is uint8
     state_mean: 0.0
     state_std: 255.0
@@ -40,16 +39,16 @@ model_para:
       sample_batch_step: 160
       grad_norm_clip: 40.0
 
-#      gpu_nums: 1
-#    gpu_config:
-#      cluster:
-#        peers:
-#      self:
-#        rank:
+    #      gpu_nums: 1
+    #    gpu_config:
+    #      cluster:
+    #        peers:
+    #      self:
+    #        rank:
     backend: bolt #tf, tflite, bolt
+    inference_batchsize: 1
 #    backend: tflite
 
 benchmark:
-  archive_root: ./logs1106
-  id: PIPELINE_SLEEP(s4_t1_la)_Bolt_NonBlock
-
+  archive_root: ./logs1227
+  id: impala_bolt
