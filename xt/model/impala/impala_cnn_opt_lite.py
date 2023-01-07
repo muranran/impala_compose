@@ -396,13 +396,13 @@ class ImpalaCnnOptLite(XTModel):
             # raise RuntimeError("debug...| p:\n{} \n b:\n{}".format(len(pi_logic_outs), len(baseline)))
         elif real_batch_size == batch_size:
             pi_logic_outs, baseline = self.inference(state)
-            # pt, bt = self.invoke(state)
+
+            # extra_p, extra_b = self.extra_inference(state)
             # logging.info("======================================\n"
             #              "tflite result:\n{}\n"
             #              "bolt result:\n{}\n"
             #              "======================================\n"
-            #              .format((pt, bt), (pi_logic_outs, baseline)))
-
+            #              .format((pi_logic_outs, baseline), (extra_p, extra_b)))
             # pi_logic_outs = pt
             # baseline = bt
         else:
@@ -467,7 +467,7 @@ class ImpalaCnnOptLite(XTModel):
         self.bolt_interpreter = {
             "interpreter": bolt_interpreter,
             # fixme: experimental revise | pipeline 3 | default 1
-            "input_shape": (1, 4, 84, 84),
+            "input_shape": (self.inference_batchsize, 4, 84, 84),
             "pi_logic_outs_index": 1,
             "baseline_index": 0,
         }
@@ -662,6 +662,26 @@ class ImpalaCnnOptLite(XTModel):
 
         elif self.backend == "tf" or self.backend == "tensorflow":
             self.set_tf_weights(weights)
+
+        elif self.backend == "bolt_":
+            if isinstance(weights, str):
+                if weights.endswith(".bolt"):
+                    self.inference = self.invoke_tflite
+                    self.extra_inference = self.invoke_bolt
+                    self.set_bolt_weight(weights)
+                    result = re.search(
+                        "model_([0-9]+[0-9]*).*?(\.[a-z]*)", weights)
+                    tflite_weights = "model_{}.tflite".format(result.group(1))
+                    tflite_weights = weights.replace(
+                        result.group(0), tflite_weights)
+                    self.set_tflite_weights(tflite_weights)
+                    self.interpreter = self.tflite_interpreter
+                    self.extra_interpreter = self.bolt_interpreter
+                else:
+                    raise TypeError(
+                        "{} doesn't end with .tflite".format(weights))
+            else:
+                raise TypeError("{} is not path-like".format(weights))
 
         else:
             raise NotImplementedError(

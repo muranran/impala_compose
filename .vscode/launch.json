@@ -11,7 +11,7 @@
             "program": "xt/main.py",
             "args": [
                 "-f",
-                "${workspaceFolder}/user/yaml/pipeline/impala_pipeline_bolt_breakout.yaml"
+                "${workspaceFolder}/user/yaml/pipeline/${fileBasename}"
             ],
             "console": "integratedTerminal",
             "justMyCode": true

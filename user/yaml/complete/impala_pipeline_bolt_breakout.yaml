@@ -50,5 +50,5 @@ model_para:
 #    backend: tflite
 
 benchmark:
-  archive_root: ./xt_archive/exp2/pipeline_bolt
-  id: impala_pb_breakout
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/complete
+  id: complete_breakout

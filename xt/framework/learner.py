@@ -176,7 +176,8 @@ class Learner(object):
             log_interval=self._log_interval,
             name=self._name,
             shared_queue=self.shared_queue,
-            compress=self.compress
+            compress=self.compress,
+            resize_batch_size=self.resize_batch_size
         )
         self.train_worker.explorer_ids = self.explorer_ids
         self.train_worker.pbt_aid = self._pbt_aid
@@ -259,6 +260,7 @@ class TrainWorker(object):
         # compress weight comm
         self.shared_queue = kwargs.get("shared_queue", None)
         self.compress = kwargs.get("compress", False)
+        self.resize_batch_size = kwargs.get("resize_batch_size", 1)
 
     @property
     def explorer_ids(self):
