@@ -41,6 +41,7 @@ import numpy as np
 from functools import partial
 import xt.model.impala.vtrace as vtrace
 from tensorflow.python.util import deprecation
+from xt.model.multi_trainer import allreduce_optimizer, syn_init_model
 from zeus.common.util.register import Registers
 from xt.model import XTModel
 from xt.model.impala.default_config import GAMMA, LR
@@ -131,6 +132,7 @@ class ImpalaCnnOptLite(XTModel):
         self.bolt_interpreter = None
         self.backend = model_info.get("backend", "tf")
         self.inference_batchsize = model_info.get("inference_batchsize", 1)
+        self.type = model_info.get('type', 'actor')
 
         super().__init__(model_info)
 
@@ -238,6 +240,11 @@ class ImpalaCnnOptLite(XTModel):
             else:
                 learning_rate = LR
             optimizer = AdamOptimizer(learning_rate)
+            # multi_trainer
+            if self.type is 'learner':
+                # self.optimizer = allreduce_optimizer(self._lr, tf.train.AdamOptimizer)
+                optimizer = allreduce_optimizer(
+                    learning_rate, tf.train.AdamOptimizer)
         elif self.opt_type == "rmsprop":
             optimizer = tf.train.RMSPropOptimizer(
                 LR, decay=0.99, epsilon=0.1, centered=True)
@@ -255,11 +262,18 @@ class ImpalaCnnOptLite(XTModel):
             clipped_gvs, global_step=global_step)
 
         # fixme: help to show the learning rate among training processing
-        self.lr = optimizer._lr
+        # self.lr = optimizer._lr
+        self.lr = learning_rate
 
         self.actor_var = TFVariables(self.out_actions, self.sess)
 
         self.sess.run(global_variables_initializer())
+
+        # from kungfu.tensorflow.initializer import BroadcastGlobalVariablesOp
+        # self.sess.run(BroadcastGlobalVariablesOp())
+        # multi_trainer
+        if self.type is 'learner':
+            self.sess = syn_init_model(self.sess)
 
         self.explore_paras = tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES,
@@ -296,8 +310,8 @@ class ImpalaCnnOptLite(XTModel):
         # raise RuntimeError(
         #     "shape {}:{}-{}-{}-{}-{}".format(self.sample_batch_steps, state.shape, bp_logic_outs.shape, actions.shape,
         #                                      dones.shape, rewards.shape))
-
         with self.graph.as_default():
+
             _, loss = self.sess.run(
                 [self.train_op, self.loss],
                 feed_dict={

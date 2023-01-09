@@ -360,7 +360,8 @@ class TrainWorker(object):
         return False
 
     def load_data(self):
-        max_load_times = 20
+        prepare_data_times = self.alg.prepare_data_times
+        max_load_times = prepare_data_times
         for _tf_val in range(max_load_times):
             # logging.debug("wait data for preparing-{}...".format(_tf_val))
             with self.logger.wait_sample_timer:
@@ -371,8 +372,8 @@ class TrainWorker(object):
                 self.alg.prepare_data(data["data"], ctr_info=data["ctr_info"])
             self.elapsed_episode += 1
 
-            if self.train_q.empty:
-                break
+            # if self.train_q.empty:
+            #     break
 
     def train(self):
         """Train model."""

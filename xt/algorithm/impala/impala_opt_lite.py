@@ -41,6 +41,20 @@ class IMPALAOptLite(Algorithm):
 
     def __init__(self, model_info, alg_config, **kwargs):
         import_config(globals(), alg_config)
+        self.type = model_info["actor"].get("type", "actor")
+        if self.type == "learner":
+            fp32_model_info = deepcopy(model_info["actor"])
+            fp32_model_info.update({"input_dtype": "float32"})
+            # fixme: should be replaced with more generic
+            fp32_model_info.update({"model_name": "ImpalaCnnOptLite"})
+            fp32_model_info.update({"type": "actor"})
+            # self.fp32_actor = model_builder(fp32_model_info)
+            self.fp32_model_info = fp32_model_info
+
+        else:
+            # fixme: multi trainer
+            model_info["actor"].update({"model_name": "ImpalaCnnOptLite"})
+
         super().__init__(alg_name="impala",
                          model_info=model_info["actor"],
                          alg_config=alg_config)
@@ -62,10 +76,6 @@ class IMPALAOptLite(Algorithm):
             train_thread = threading.Thread(target=self._train_thread)
             train_thread.setDaemon(True)
             train_thread.start()
-
-        fp32_model_info = deepcopy(model_info["actor"])
-        fp32_model_info.update({"input_dtype": "float32"})
-        self.fp32_actor = model_builder(fp32_model_info)
 
     def _train_thread(self):
         while True:
@@ -114,7 +124,8 @@ class IMPALAOptLite(Algorithm):
     def save(self, model_path, model_index):
         """Save model."""
         actor_name = "actor" + str(model_index).zfill(5)
-        actor_name = self.actor.save_model(os.path.join(model_path, actor_name))
+        actor_name = self.actor.save_model(
+            os.path.join(model_path, actor_name))
         actor_name = actor_name.split("/")[-1]
 
         return [actor_name]
@@ -154,6 +165,8 @@ class IMPALAOptLite(Algorithm):
 
     def get_weights(self):
         """Get the actor model weights as default."""
-        self.fp32_actor.set_tf_weights(self.actor.get_weights("tf"))
+        if not hasattr(self, "fp32_actor"):
+            self.fp32_actor = model_builder(self.fp32_model_info)
+        self.fp32_actor.set_tf_weights(self.actor.get_weights())
         return self.fp32_actor.get_weights()
         # return self.actor.get_weights()
