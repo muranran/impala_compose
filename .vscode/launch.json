@@ -19,7 +19,7 @@
             "program": "xt/main.py",
             "args": [
                 "-f",
-                "${workspaceFolder}/user/yaml/multi_learner_test.yaml",
+                "${workspaceFolder}/${relativeFile}",
             ],
             "console": "integratedTerminal",
             "justMyCode": true

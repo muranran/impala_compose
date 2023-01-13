@@ -368,8 +368,8 @@ class ImpalaCnnOptLite(XTModel):
             else:
                 return (x.astype(np.float32) - mean) / std
 
-        state = [state_transform2(s, self.sta_mean, self.sta_std)
-                 for s in state]
+        # state = [state_transform2(s, self.sta_mean, self.sta_std)
+        #          for s in state]
 
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
@@ -702,20 +702,20 @@ class ImpalaCnnOptLite(XTModel):
                 "{} has not been implemented".format(self.backend))
 
     def set_tflite_weights(self, weights):
-        logging.info(
-            "====================Create TFLite Interpreter======================")
+        # logging.info(
+        #     "====================Create TFLite Interpreter======================")
         self.create_tflite_interpreter(weights)
 
     def set_bolt_weight(self, weights):
-        logging.info(
-            "====================Create Bolt Interpreter======================")
+        # logging.info(
+        #     "====================Create Bolt Interpreter======================")
         self.create_bolt_interpreter_fix(weights)
 
     def set_tf_weights(self, weights):
         """Set weight with memory tensor."""
         with self.graph.as_default():
-            logging.info(
-                "====================Create TF Interpreter======================")
+            # logging.info(
+            #     "====================Create TF Interpreter======================")
             # order = weights["order"]
             # logging.info("=====================P {} Use Weight {}========================".format(os.getpid(), order))
             # weights = weights["weight"]
