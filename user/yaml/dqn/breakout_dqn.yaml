@@ -16,7 +16,7 @@ agent_para:
   agent_num : 1
   agent_config: {
     'max_steps': 2000,
-    'complete_step': 10000000,
+    'complete_step': 1000000,
     'episode_count': 200000
     }
 
@@ -29,6 +29,7 @@ model_para:
       'LR': 0.00015,
       }
 # pass
-env_num: 4
+env_num: 2
 benchmark:
-  archive_root: ./logs1104
+  id: xingtian_dqn_breakout
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/dqn_data
