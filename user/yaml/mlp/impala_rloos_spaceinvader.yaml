@@ -4,6 +4,7 @@ alg_para:
     train_per_checkpoint: 1
     prepare_times_per_train: 2
     BATCH_SIZE: 320
+    prefetch: False
 
 env_para:
   env_name: EnvPool
@@ -15,7 +16,7 @@ env_para:
     wait_num: &infer_batch 3
     dim: 84
 
-env_num: 20
+env_num: 24
 group_num: 4
 speedup: 3
 compress: False
@@ -57,5 +58,5 @@ model_para:
 #    backend: tflite
 
 benchmark:
-  archive_root: /home/data/dxa/xingtian_revise/xt_archive/mlq
-  id: rloos_spaceinvader
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/module_multi_learner
+  id: rloos_spaceinvaders

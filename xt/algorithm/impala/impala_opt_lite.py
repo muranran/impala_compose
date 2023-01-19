@@ -30,7 +30,7 @@ from zeus.common.ipc.uni_comm import UniComm
 from zeus.common.util.register import Registers
 from xt.model.tf_compat import loss_to_val
 from zeus.common.util.common import import_config
-from xt.algorithm.alg_utils import DivideDistPolicy, FIFODistPolicy, EqualDistPolicy
+from xt.algorithm.alg_utils import DivideDistPolicy, FIFODistPolicy, EqualDistPolicy, BroadcastAllPolicy
 from xt.model import model_builder
 from copy import deepcopy
 
@@ -65,10 +65,15 @@ class IMPALAOptLite(Algorithm):
         self.rewards = list()
         self.async_flag = False
 
+        self.prefetch = alg_config.get('prefetch', False)
         # update to divide model policy
-        self.dist_model_policy = FIFODistPolicy(
-            alg_config["instance_num"],
-            prepare_times=self._prepare_times_per_train)
+        if not self.prefetch:
+            self.dist_model_policy = FIFODistPolicy(
+                alg_config["instance_num"],
+                prepare_times=self._prepare_times_per_train)
+        else:
+            self.dist_model_policy = BroadcastAllPolicy(
+                alg_config["instance_num"], prepare_times=self._prepare_times_per_train)
 
         self.use_train_thread = False
         if self.use_train_thread:

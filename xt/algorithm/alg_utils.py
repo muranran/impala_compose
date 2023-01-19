@@ -29,7 +29,8 @@ def _clip_explorer_id(raw_dist_info, clip_set):
     elif raw_dist_info["explorer_id"] == -1:
         raw_dist_info["explorer_id"] = clip_set
     else:
-        clipped_id = list([_id for _id in raw_dist_info["explorer_id"] if _id in clip_set])
+        clipped_id = list(
+            [_id for _id in raw_dist_info["explorer_id"] if _id in clip_set])
         raw_dist_info["explorer_id"] = clipped_id
     return raw_dist_info
 
@@ -69,6 +70,7 @@ def _fetch_broker_info(ctr_relation_buf: defaultdict):
 
 class FIFODistPolicy(DefaultAlgDistPolicy):
     """DESC: distribute to which had submitted explore data."""
+
     def __init__(self, actor_num, prepare_times, **kwargs):
         super(FIFODistPolicy, self).__init__(actor_num, **kwargs)
         self._processed_agent = deque()
@@ -89,9 +91,24 @@ class FIFODistPolicy(DefaultAlgDistPolicy):
 
                 ctr_relation_buf[_info[0]].update((_info[1],))
             except IndexError:
-                logging.ERROR("without data in FIFODistPolicy.deque, used last!")
+                logging.ERROR(
+                    "without data in FIFODistPolicy.deque, used last!")
 
         return _clip_explorer_id(_fetch_broker_info(ctr_relation_buf), explorer_set)
+
+
+# broadcasting
+class BroadcastAllPolicy(DefaultAlgDistPolicy):
+    def __init__(self, actor_num, prepare_times, **kwargs):
+        super(BroadcastAllPolicy, self).__init__(actor_num, **kwargs)
+        self._processed_agent = deque()
+        self.prepare_data_times = prepare_times
+
+    def add_processed_ctr_info(self, ctr_info):
+        self._processed_agent.append(ctr_info)
+
+    def get_dist_info(self, model_index, explorer_set=None):
+        return self.default_policy
 
 
 class EqualDistPolicy(DefaultAlgDistPolicy):

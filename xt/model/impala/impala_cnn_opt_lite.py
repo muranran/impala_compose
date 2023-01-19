@@ -132,6 +132,8 @@ class ImpalaCnnOptLite(XTModel):
         self.bolt_interpreter = None
         self.backend = model_info.get("backend", "tf")
         self.inference_batchsize = model_info.get("inference_batchsize", 1)
+        self.using_multi_learner = model_info.get("using_multi_learner", False)
+
         self.type = model_info.get('type', 'actor')
 
         super().__init__(model_info)
@@ -241,7 +243,7 @@ class ImpalaCnnOptLite(XTModel):
                 learning_rate = LR
             optimizer = AdamOptimizer(learning_rate)
             # multi_trainer
-            if self.type is 'learner':
+            if self.type is 'learner' and self.using_multi_learner:
                 # self.optimizer = allreduce_optimizer(self._lr, tf.train.AdamOptimizer)
                 optimizer = allreduce_optimizer(
                     learning_rate, tf.train.AdamOptimizer)
@@ -272,7 +274,7 @@ class ImpalaCnnOptLite(XTModel):
         # from kungfu.tensorflow.initializer import BroadcastGlobalVariablesOp
         # self.sess.run(BroadcastGlobalVariablesOp())
         # multi_trainer
-        if self.type is 'learner':
+        if self.type is 'learner' and self.using_multi_learner:
             self.sess = syn_init_model(self.sess)
 
         self.explore_paras = tf.get_collection(

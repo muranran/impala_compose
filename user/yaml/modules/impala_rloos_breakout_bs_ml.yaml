@@ -2,23 +2,22 @@ alg_para:
   alg_name: IMPALAOptLite
   alg_config:
     train_per_checkpoint: 1
-    prepare_times_per_train: 2
-    BATCH_SIZE: 320
-    prefetch: False
+    prepare_times_per_train: 8
+    BATCH_SIZE: &batch_size 1280
+    prefetch: True
 
 env_para:
   env_name: EnvPool
   env_info:
-    name: BeamRiderNoFrameskip-v4
+    name: BreakoutNoFrameskip-v4
     vision: False
-    vector_env_size: 1
-    size: 1
-    wait_num: &infer_batch 1
-    dim: 84
+    vector_env_size: 5
+    size: 5
+    wait_num: &infer_batch 3
 
-env_num: 24
-# group_num: 4
-speedup: 1
+env_num: 20
+group_num: 4
+speedup: 3
 compress: False
 
 agent_para:
@@ -26,7 +25,7 @@ agent_para:
   agent_num: 1
   agent_config:
     max_steps: 160
-    complete_step: 20020000
+    complete_step: 1002000
 
 model_para:
   actor:
@@ -35,28 +34,23 @@ model_para:
     input_dtype: uint8 # default is uint8
     state_mean: 0.0
     state_std: 255.0
-    action_dim: 9
+    action_dim: 4
     model_config:
-      LR: 0.0005 # best 0.0003
-      sample_batch_step: 160
+      LR: 0.0005
+      sample_batch_step: *batch_size
       grad_norm_clip: 40.0
+
       gpu_nums: 2
     gpu_config:
       cluster:
         peers:
       self:
         rank:
-
-    #      gpu_nums: 1
-    #    gpu_config:
-    #      cluster:
-    #        peers:
-    #      self:
-    #        rank:
     backend: tf #tf, tflite, bolt
     inference_batchsize: *infer_batch
+    using_multi_learner: True
 #    backend: tflite
 
 benchmark:
-  archive_root: /home/data/dxa/xingtian_revise/xt_archive/module_multi_learner
-  id: rloos_beamrider
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/bonus_mlbf
+  id: rloos_breakout_bs1280_mpf
