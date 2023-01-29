@@ -31,7 +31,7 @@ model_para:
     action_dim: 4
     input_dtype: uint8
     model_config:
-      BATCH_SIZE: 160
+      BATCH_SIZE: 640
       CRITIC_LOSS_COEF: 1.0
       ENTROPY_LOSS: 0.003
       LOSS_CLIPPING: 0.1
@@ -51,8 +51,8 @@ model_para:
         rank:
     backend: tf #tf, tflite, bolt
     inference_batchsize: 1
-    using_multi_learner: False
+    using_multi_learner: True
 
 benchmark:
   archive_root: /home/data/dxa/xingtian_revise/xt_archive/mlppo
-  id: hrl_breakout_ppo_sml_bs160
+  id: hrl_breakout_ppo_mml_bs640_shared

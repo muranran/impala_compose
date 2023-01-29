@@ -173,7 +173,7 @@ class MultiTrainer(object):
         self.trainer_id = 1
         gpu_self.update({'rank': self.trainer_id})
 
-        self.device_id = 1
+        self.device_id = 0
         os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = str(self.device_id)
         os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
         init_from_config(gpu_config)
@@ -300,12 +300,12 @@ def send_train_data_shared(state, label, gpu_nums, trainer_q, not_has_shared):
 
 def send_train_data(state, label, gpu_nums, trainer_q, first):
     list_wrapper = None
-    if isinstance(state,list) and len(state) == 1:
+    if isinstance(state, list) and len(state) == 1:
         list_wrapper = True
-    
+
     if list_wrapper:
-        state = state[0] 
-           
+        state = state[0]
+
     if gpu_nums == 2:
         t0 = time()
         shape = state.shape[0] // 2
@@ -315,7 +315,8 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
         state1 = state[shape:]
         label1 = [l[shape:] for l in label]
 
-        train_data = {'state': [state1] if list_wrapper else state1, 'label': label1}
+        train_data = {'state': [state1]
+                      if list_wrapper else state1, 'label': label1}
         train_msg = message(train_data, cmd="trainer")
         t2 = time()
 
@@ -324,7 +325,28 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
         t3 = time()
 
         return [state0] if list_wrapper else state0, label0
+    elif gpu_nums >= 3:
+        t0 = time()
+        shape = state.shape[0] // gpu_nums
+        state_split = []
+        label_split = []
+        for i in range(gpu_nums):
+            state_split.append(state[shape*i:shape*(i+1)])
+            label_split.append([l[shape*i:shape*(i+1)] for l in label])
 
+        for i in range(gpu_nums-1):
+            train_data = {'state': [state_split[i]]
+                        if list_wrapper else state1, 'label': label1}
+            train_msg = message(train_data, cmd="trainer")
+            trainer_q[i].send(train_msg)
+        t2 = time()
+
+        
+
+        t3 = time()
+
+        return [state0] if list_wrapper else state0, label0
+        
     else:
         raise NotImplementedError
 
@@ -343,5 +365,5 @@ def allreduce_optimizer(lr, function, with_keras=False, **kwargs):
         optimizer = SynchronousSGDOptimizer(
             optimizer, with_keras=True, nccl=True)
     else:
-        optimizer = SynchronousSGDOptimizer(optimizer, nccl=True)
+        optimizer = SynchronousSGDOptimizer(optimizer, nccl=False)
     return optimizer
