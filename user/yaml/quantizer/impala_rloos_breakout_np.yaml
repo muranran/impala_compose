@@ -52,5 +52,5 @@ model_para:
 #    backend: tflite
 
 benchmark:
-  archive_root: /home/data/dxa/xingtian_revise/xt_archive/module_pipeline
-  id: rloos_breakout_pipeline_x
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/quantizer_testing
+  id: hrl_breakout_qt

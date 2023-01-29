@@ -12,7 +12,7 @@ from zeus.common.util.common import bytes_to_str, check_port
 from xt.framework import Registers
 from xt.model.model import XTModel
 import setproctitle
-import shared_numpy as snp
+# import shared_numpy as snp
 
 
 os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -262,37 +262,37 @@ def create_trainer(trainer_id, model_info, device_id):
 #         trainer_q[j].send(train_msg)
 #
 #     return state_split[0], label_split[0]
-def send_train_data_shared(state, label, gpu_nums, trainer_q, not_has_shared):
-    shape = state.shape[0] // 2
-    shared_state = snp.ndarray((shape, *state.shape[1:]), dtype=state.dtype)
-    shared_label0 = snp.ndarray(
-        (shape, *label[0].shape[1:]), dtype=label[0].dtype)
-    shared_label1 = snp.ndarray(
-        (shape, *label[1].shape[1:]), dtype=label[1].dtype)
-    shared_label2 = snp.ndarray(
-        (shape, *label[2].shape[1:]), dtype=label[2].dtype)
-    shared_label3 = snp.ndarray(
-        (shape, *label[3].shape[1:]), dtype=label[3].dtype)
+# def send_train_data_shared(state, label, gpu_nums, trainer_q, not_has_shared):
+#     shape = state.shape[0] // 2
+#     shared_state = snp.ndarray((shape, *state.shape[1:]), dtype=state.dtype)
+#     shared_label0 = snp.ndarray(
+#         (shape, *label[0].shape[1:]), dtype=label[0].dtype)
+#     shared_label1 = snp.ndarray(
+#         (shape, *label[1].shape[1:]), dtype=label[1].dtype)
+#     shared_label2 = snp.ndarray(
+#         (shape, *label[2].shape[1:]), dtype=label[2].dtype)
+#     shared_label3 = snp.ndarray(
+#         (shape, *label[3].shape[1:]), dtype=label[3].dtype)
 
-    if not_has_shared:
-        trainer_q[0].put(shared_state)
-        trainer_q[0].put(shared_label0)
-        trainer_q[0].put(shared_label1)
-        trainer_q[0].put(shared_label2)
-        trainer_q[0].put(shared_label3)
+#     if not_has_shared:
+#         trainer_q[0].put(shared_state)
+#         trainer_q[0].put(shared_label0)
+#         trainer_q[0].put(shared_label1)
+#         trainer_q[0].put(shared_label2)
+#         trainer_q[0].put(shared_label3)
 
-    state0 = state[:shape]
-    label0 = [l[:shape] for l in label]
+#     state0 = state[:shape]
+#     label0 = [l[:shape] for l in label]
 
-    shared_state[:] = state[shape:]
-    shared_label0[:] = label[0][shape:]
-    shared_label1[:] = label[1][shape:]
-    shared_label2[:] = label[2][shape:]
-    shared_label3[:] = label[3][shape:]
+#     shared_state[:] = state[shape:]
+#     shared_label0[:] = label[0][shape:]
+#     shared_label1[:] = label[1][shape:]
+#     shared_label2[:] = label[2][shape:]
+#     shared_label3[:] = label[3][shape:]
 
-    trainer_q[0].put(b"1")
+#     trainer_q[0].put(b"1")
 
-    return state0, label0
+#     return state0, label0
 
 
 def send_train_data(state, label, gpu_nums, trainer_q, first):

@@ -24,7 +24,7 @@ import time
 import numpy as np
 
 from functools import partial, update_wrapper
-import xt.model.impala.vtrace as vtrace
+# import xt.model.impala.vtrace as vtrace
 from tensorflow.python.util import deprecation
 from xt.model.multi_trainer import allreduce_optimizer, syn_init_model
 from zeus.common.util.register import Registers
@@ -53,7 +53,8 @@ from absl import logging
 # from tensorflow import graph_util
 from tensorflow.compat.v1 import graph_util
 from multiprocessing import Queue, Process
-tf.compat.v1.enable_eager_execution()
+# tf.compat.v1.enable_eager_execution()
+tf.enable_eager_execution()
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
@@ -61,8 +62,8 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 # common parameters
 parser = argparse.ArgumentParser(description="compress_tool")
-parser.add_argument("--weights", "-w", type=str)
-parser.add_argument("--output", "-o", type=str)
+parser.add_argument("--weights", "-w", type=str,default="/home/data/dxa/xingtian_revise/impala_compose/user/model/weights.h5")
+parser.add_argument("--output", "-o", type=str,default="/home/data/dxa/xingtian_revise/impala_compose/user/model/test_model2.h5")
 
 args = parser.parse_args()
 
@@ -119,40 +120,51 @@ class CompressModelV2:
 
 
 def compress_weights(weights, tflite_saved_file):
+    T0 = time.time()
     model = CompressModelV2()
+    T1 = time.time()
     model.model.load_weights(weights)
+    T2 = time.time()
+    
     converter = tf2.lite.TFLiteConverter.from_keras_model(
         model.model)
 
     tflite_model = converter.convert()
-
+    T3 = time.time()
     with open(tflite_saved_file, 'wb') as f:
         f.write(tflite_model)
+    
+    print("create time: {:.2f}ms".format((T1-T0)*1000))
+    print("restore time: {:.2f}ms".format((T2-T1)*1000))
+    print("convert time: {:.2f}ms".format((T3-T2)*1000))
 
 
 def main():
     testfiledir = "/home/data/dxa/xingtian_revise/impala_compose/user/model"
-
+    T0 = time.time()
     model = CompressModelV2()
     model.model.load_weights(testfiledir+"/weights.h5")
     print(model.model.summary())
 
-    T0 = time.time()
+    T1 = time.time()
 
     converter = tf2.lite.TFLiteConverter.from_keras_model(
         model.model)
 
     tflite_model = converter.convert()
 
-    T1 = time.time()
-    print("convert time: {:.2f}ms".format((T1-T0)*1000))
+    T2 = time.time()
+    print("restore time: {:.2f}ms".format((T1-T0)*1000))
+    print("convert time: {:.2f}ms".format((T2-T1)*1000))
 
 
 if __name__ == "__main__":
     # main()
-    T0 = time.time()
+    
     weights = args.weights
     tflite_model_file = args.output
+    
+    T0 = time.time()
     compress_weights(weights,tflite_model_file)
     T1 = time.time()
     

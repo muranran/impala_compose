@@ -81,7 +81,8 @@ from absl import logging
 # from tensorflow_core.python.framework import graph_util
 # from tensorflow import graph_util
 from tensorflow.compat.v1 import graph_util
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()
+tf.disable_eager_execution()
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
@@ -707,9 +708,10 @@ if __name__ == "__main__":
     tflite_model_file = testfiledir+"/test_model.tflite"
     import subprocess as subp
     import shlex
-    subp.run(shlex.split("/home/tank/miniconda3/envs/qt/bin/python {} -w {} -o {}".format(
+    ret = subp.run(shlex.split("/home/tank/miniconda3/envs/qt/bin/python {} -w {} -o {}".format(
         compress_tool_file,weight_file,tflite_model_file
-    )))
+    )),capture_output=True, encoding='utf-8')
+    print("ret:\n",ret.stdout)
     print("convert model completed successfully")
     # with CustomObjectScope({"state_transform":model1._transform}):
     #     model2 = keras.models.load_model(keras_model)

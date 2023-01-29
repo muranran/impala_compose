@@ -5,7 +5,7 @@ from typing import List, Dict
 from tensorflow.compat.v1 import Graph, GraphDef, import_graph_def, Session
 from tensorflow.compat.v1.gfile import GFile
 import tensorflow.compat.v1 as tf
-# import graph_def_editor as gde
+import graph_def_editor as gde
 import re
 from typing import Tuple
 import os
