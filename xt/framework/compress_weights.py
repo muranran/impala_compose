@@ -83,7 +83,8 @@ class CompressWeights:
                           "==================================\n"
                           .format(cid, compress_time * 1000))
                 except ValueError as err_v:
-                    logging.info("===================GET BUG {}====================".format(err_v))
+                    logging.info(
+                        "===================GET BUG {}====================".format(err_v))
                     continue
                 compress_weights_.put(compress_weight_)
             else:
@@ -183,7 +184,8 @@ def save_as_tflite(pb_file: str, input_names: List[str], output_names: List[str]
     return tflite_file
 
 
-def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names: List[str], save_path: str):
+def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names: List[str], save_path: str,
+                              new_batch_size=3):
     with GFile(pb_file, "rb") as f:
         graph_def = GraphDef()
         graph_def.ParseFromString(f.read())
@@ -195,7 +197,8 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
                          name=""
                          )
     g = gde.Graph(graph.as_graph_def())
-    gde.rewrite.change_batch_size(g, new_size=3, inputs=[g["state_input"]])
+    gde.rewrite.change_batch_size(
+        g, new_size=new_batch_size, inputs=[g["state_input"]])
 
     graph_revised = g.to_graph_def()
     with Graph().as_default() as graph_r:
@@ -211,6 +214,7 @@ def save_as_tflite_resize_fix(pb_file: str, input_names: List[str], output_names
 
     # print("===================CONVERTER 0 ===================")
     converter = tf.lite.TFLiteConverter.from_session(sess, [x], [y, z])
+
     # converter.inference_input_type = tf.uint8
     # converter.quantized_input_stats = {'state_input': (128, 127)}
     # print("===================CONVERTER 1 ===================")
@@ -252,7 +256,8 @@ def save_tflite_as_bolt(config: Dict):
 
     bolt_flag = "FP32"
     raw_proc_cmd = [tflite_to_bolt, "-d", path, "-m", file, "-i", bolt_flag]
-    p = subprocess.run(raw_proc_cmd, capture_output=True, check=True, encoding="utf-8")
+    p = subprocess.run(raw_proc_cmd, capture_output=True,
+                       check=True, encoding="utf-8")
     # p = subprocess.Popen(
     #     raw_proc_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     info = p.stdout
@@ -274,14 +279,18 @@ def exp2_p_f(config_: Dict):
     input_names = config_.get("input_names")
     output_names = config_.get("output_names")
     save_path = config_.get("save_path")
+    resize_batch_size = config_.get("resize_batch_size", 3)
 
     # tflite_file = save_as_tflite(pb_file, input_names, output_names, save_path)
     try:
-        tflite_file = save_as_tflite_resize_fix(pb_file, input_names, output_names, save_path)
+        tflite_file = save_as_tflite_resize_fix(
+            pb_file, input_names, output_names, save_path, resize_batch_size)
     except:
-        logging.info("=======================FLAG ENCOUNTER BUG=================================")
+        logging.info(
+            "=======================FLAG ENCOUNTER BUG=================================")
         raise RuntimeError("UNKNOWN BUG")
-    logging.info("=====================Complete Weight Compress========================")
+    logging.info(
+        "=====================Complete Weight Compress========================")
     return tflite_file
 
 
@@ -330,7 +339,8 @@ if __name__ == '__main__':
 
     raw_weights = Queue()
     compress_weights = Queue()
-    compress_workers = CompressWeights(shared_queue=[raw_weights, compress_weights])
+    compress_workers = CompressWeights(
+        shared_queue=[raw_weights, compress_weights])
     compress_workers.register_weights_process_function(exp2_p_f)
     compress_workers.start_multi_task()
 
