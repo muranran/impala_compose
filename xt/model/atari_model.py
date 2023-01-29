@@ -19,5 +19,13 @@ def get_atari_filter(shape):
         return filters_84x84
     elif len(shape) == 3 and shape[:2] == [42, 42]:
         return filters_42x42
+    # elif len(shape) == 3 and shape[:2] == [42, 84]:
+    #     return \
+    #         [
+    #             [16, 4, 4],
+    #             [32, 4, 2],
+    #             [256, 11, 1],
+    #         ]
     else:
-        raise ValueError("Without default architecture for obs shape {}".format(shape))
+        raise ValueError(
+            "Without default architecture for obs shape {}".format(shape))

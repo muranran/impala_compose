@@ -1,3 +1,2 @@
 [console_scripts]
 kungfu-run = kungfu.cmd:run
-

@@ -10,6 +10,7 @@
 
 import argparse
 import os
+from time import time
 
 import kungfu as kf
 import numpy as np
@@ -160,6 +161,7 @@ def train_mnist(sess,
 
     print('training')
     # train the model with all batches allocated to the node
+    start_0 = time()
     for step in range(n_steps):
         xs = dataset['training_set']['x'][offset:offset + batch_size]
         y_s = dataset['training_set']['y'][offset:offset + batch_size]
@@ -178,6 +180,9 @@ def train_mnist(sess,
             result = test_mnist(sess, x, y_, test_op,
                                 dataset['validation_set'])
             print('validation accuracy: %f' % result)
+
+    end_0 = time()
+    # print("train time ================== {}".format(end_0 - start_0))
 
 
 # parse arguments from the command line

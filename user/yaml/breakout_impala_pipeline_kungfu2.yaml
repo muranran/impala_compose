@@ -25,7 +25,7 @@ agent_para:
   agent_num : 1
   agent_config:
     max_steps: 160
-    complete_step: 10020000
+    complete_step: 30020000
 
 model_para:
   actor:
@@ -47,6 +47,7 @@ model_para:
 #      self:
 #        rank:
     backend: bolt #tf, tflite, bolt
+#    backend: tflite
 
 benchmark:
   archive_root: ./logs1106

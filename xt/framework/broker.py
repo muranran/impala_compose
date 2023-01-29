@@ -412,7 +412,7 @@ class Broker(object):
             # predict_reply
             # e.g, {'ctr_info': {'broker_id': 0, 'explorer_id': 4, 'agent_id': -1,
             # 'cmd': 'predict_reply'}, 'data': 0}
-            explorer_id = [-1]
+            # explorer_id = [-1]
             for _eid in explorer_id:
                 if _eid > -1:
                     self.send_explorer_q[_eid].put(recv_data)

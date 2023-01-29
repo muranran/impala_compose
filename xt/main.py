@@ -82,27 +82,27 @@ def main():
         "\n{}\n XT start work...\n{}\n{}".format("*" * 50, _exp_params, "*" * 50)
     )
 
-    import tensorflow.compat.v1 as tf
-    import os
-    import numpy as np
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    logging.info("==================XT Available GPU : {} / {} ====================="
-                 "\nE: {}"
-                 .format(tf.config.experimental.list_physical_devices(device_type='GPU'),
-                         os.environ["CUDA_VISIBLE_DEVICES"], 2))
-    graph = tf.Graph()
-    with graph.as_default():
-        a = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="a")
-        b = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="b")
-        c = a + b
+    # import tensorflow.compat.v1 as tf
+    # import os
+    # import numpy as np
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    # logging.info("==================XT Available GPU : {} / {} ====================="
+    #              "\nE: {}"
+    #              .format(tf.config.experimental.list_physical_devices(device_type='GPU'),
+    #                      os.environ["CUDA_VISIBLE_DEVICES"], 2))
+    # graph = tf.Graph()
+    # with graph.as_default():
+    #     a = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="a")
+    #     b = tf.placeholder(dtype=tf.float32, shape=(None, 4), name="b")
+    #     c = a + b
 
-    in1 = np.random.randn(4, 4).astype(np.float32)
-    in2 = np.random.randn(4, 4).astype(np.float32)
+    # in1 = np.random.randn(4, 4).astype(np.float32)
+    # in2 = np.random.randn(4, 4).astype(np.float32)
 
-    with tf.Session(graph=graph).as_default() as sess:
+    # with tf.Session(graph=graph).as_default() as sess:
 
-        res = sess.run([c], feed_dict={"a:0": in1, "b:0": in2})
-        print(res)
+    #     res = sess.run([c], feed_dict={"a:0": in1, "b:0": in2})
+    #     print(res)
 
 
     with open(args.config_file, "r") as conf_file:

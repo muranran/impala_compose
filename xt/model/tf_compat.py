@@ -112,6 +112,7 @@ DTYPE_MAP = {
 
 def get_sess_graph():
     """Get tf.graph and session."""
+    import tensorflow.compat.v1 as tf
     graph = tf.Graph()
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
