@@ -1,4 +1,6 @@
 import argparse
+import zmq
+import tempfile
 from tensorflow.compat.v1.train import AdamOptimizer, Saver, linear_cosine_decay
 from tensorflow.compat.v1 import keras
 from tensorflow.compat.v1.keras.optimizers import Adam
@@ -62,8 +64,10 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 # common parameters
 parser = argparse.ArgumentParser(description="compress_tool")
-parser.add_argument("--weights", "-w", type=str,default="/home/data/dxa/xingtian_revise/impala_compose/user/model/weights.h5")
-parser.add_argument("--output", "-o", type=str,default="/home/data/dxa/xingtian_revise/impala_compose/user/model/test_model2.h5")
+parser.add_argument("--weights", "-w", type=str,
+                    default="/home/data/dxa/xingtian_revise/impala_compose/user/model/weights.h5")
+parser.add_argument("--output", "-o", type=str,
+                    default="/home/data/dxa/xingtian_revise/impala_compose/user/model/test_model2.h5")
 
 args = parser.parse_args()
 
@@ -125,7 +129,7 @@ def compress_weights(weights, tflite_saved_file):
     T1 = time.time()
     model.model.load_weights(weights)
     T2 = time.time()
-    
+
     converter = tf2.lite.TFLiteConverter.from_keras_model(
         model.model)
 
@@ -133,7 +137,7 @@ def compress_weights(weights, tflite_saved_file):
     T3 = time.time()
     with open(tflite_saved_file, 'wb') as f:
         f.write(tflite_model)
-    
+
     print("create time: {:.2f}ms".format((T1-T0)*1000))
     print("restore time: {:.2f}ms".format((T2-T1)*1000))
     print("convert time: {:.2f}ms".format((T3-T2)*1000))
@@ -158,15 +162,59 @@ def main():
     print("convert time: {:.2f}ms".format((T2-T1)*1000))
 
 
+def compress_proc():
+    # create communication pipeline
+    context = zmq.Context()
+    socket = context.socket(zmq.REP)
+    socket.bind("tcp://*:5555")
+    T0 = time.time()
+    model = CompressModelV2()
+    create_time = time.time() - T0
+    while True:
+        #  Wait for next request from client
+        message = socket.recv().decode()
+        if message == "terminated":
+            break
+        
+        weights, tflite_saved_file = message.split()
+        if not os.path.exists(weights):
+            continue
+
+        T0 = time.time()
+        model.model.load_weights(weights)
+        restore_time = time.time() - T0
+
+        T0 = time.time()
+        converter = tf2.lite.TFLiteConverter.from_keras_model(
+            model.model)
+
+        tflite_model = converter.convert()
+
+        with open(tflite_saved_file, 'wb') as f:
+            f.write(tflite_model)
+        convert_time = time.time() - T0
+
+        time.sleep(1)
+
+        message = "{} {:.2f} {:.2f} {:.2f}".format(tflite_saved_file,
+                                                   create_time*1000,
+                                                   restore_time*1000,
+                                                   convert_time*1000)
+        socket.send(message.encode())
+
+
 if __name__ == "__main__":
     # main()
-    
-    weights = args.weights
-    tflite_model_file = args.output
-    
-    T0 = time.time()
-    compress_weights(weights,tflite_model_file)
-    T1 = time.time()
-    
-    print("compress time: {:.2f}ms".format((T1-T0)*1000))
-    
+
+    # weights = args.weights
+    # tflite_model_file = args.output
+
+    # # T0 = time.time()
+    # # compress_weights(weights,tflite_model_file)
+    # # T1 = time.time()
+
+    # # print("compress time: {:.2f}ms".format((T1-T0)*1000))
+
+    # res = weights + " " + tflite_model_file
+    # print(res.split())
+    compress_proc()
