@@ -22,7 +22,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 class MultiTrainerModel(object):
     """
     Model Base class for model module.
-
     Owing to the same name to Keras.Model, set `XTModel` as the base class.
     User could inherit the XTModel, to implement their model.
     """
@@ -30,7 +29,6 @@ class MultiTrainerModel(object):
     def __init__(self, model_info):
         """
         Initialize XingTian Model.
-
         To avoid the compatibility problems about tensorflow's versions.
         Model class will hold their graph&session within itself.
         Now, we used the keras's API to create models.
@@ -40,6 +38,9 @@ class MultiTrainerModel(object):
         model_name = model_info['model_name']
         model_config = model_info.get('model_config', None)
         self.gpu_nums = model_config.get('gpu_nums', 1)
+        sample_batch_step = model_config.get("sample_batch_step")
+        model_config.update({"sample_batch_step": sample_batch_step//2})
+        # model_info.update(""
 
         self.trainer_q = create_multi_trainer(self.gpu_nums, model_info)
 
@@ -54,7 +55,6 @@ class MultiTrainerModel(object):
     def predict(self, state):
         """
         Do predict use the newest model.
-
         :param state:
         :return: output tensor ref to policy.model
         """
@@ -62,7 +62,8 @@ class MultiTrainerModel(object):
 
     def train(self, state, label):
         """Train the model."""
-        state_split, label_split = send_train_data(state, label, self.gpu_nums, self.trainer_q)
+        state_split, label_split = send_train_data(
+            state, label, self.gpu_nums, self.trainer_q)
         return self.model_.train(state_split, label_split)
 
     def set_weights(self, weights):
@@ -125,13 +126,13 @@ class MultiTrainer(object):
         gpu_self = gpu_config.get('self', None)
 
         # print("self.trainer_id =============== {}".format(self.trainer_id))
-
+        self.trainer_id = 1
         gpu_self.update({'rank': self.trainer_id})
-        init_from_config(gpu_config)
 
+        self.device_id = 1
         os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = str(self.device_id)
         os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
-
+        init_from_config(gpu_config)
         self.model = model_builder(self.config_info)
         # print("self.config_info: ============", self.config_info)
         self.process_fn = {'trainer': self.train}
@@ -171,7 +172,8 @@ def create_multi_trainer(gpu_nums, model_info):
 
     gpu_self = gpu_config.get('self', None)
     gpu_self.update({'rank': 0})
-
+    os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = str(0)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(0)
     init_from_config(gpu_config)
 
     return trainer_q
@@ -240,16 +242,16 @@ def send_train_data(state, label, gpu_nums, trainer_q):
             input_split = label[i][j * shape_split: (j + 1) * shape_split]
             label_split[j].append(input_split)
 
-
-
     for j in range(gpu_nums - 1):
-        train_data = {'state': state_split[j + 1][0], 'label': label_split[j + 1]}
+        train_data = {'state': state_split[j + 1]
+                      [0], 'label': label_split[j + 1]}
         # print("state.length =========== {}".format(len(state_split[j + 1])))
         # print("state.shape =========== {}".format(state_split[j + 1][0].shape))
         train_msg = message(train_data, cmd="trainer")
         trainer_q[j].send(train_msg)
 
     return state_split[0][0], label_split[0]
+
 
 def syn_init_model(sess):
     from kungfu.tensorflow.initializer import BroadcastGlobalVariablesOp
@@ -262,7 +264,8 @@ def allreduce_optimizer(lr, function, with_keras=False, **kwargs):
     from kungfu.python import current_cluster_size
     optimizer = function(learning_rate=lr * current_cluster_size(), **kwargs)
     if with_keras:
-        optimizer = SynchronousSGDOptimizer(optimizer, with_keras=True, nccl=True)
+        optimizer = SynchronousSGDOptimizer(
+            optimizer, with_keras=True, nccl=True)
     else:
         optimizer = SynchronousSGDOptimizer(optimizer, nccl=True)
     return optimizer
