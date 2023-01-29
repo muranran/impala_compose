@@ -40,9 +40,12 @@ class MultiTrainerModel(object):
         model_name = model_info['model_name']
         model_config = model_info.get('model_config', None)
         self.gpu_nums = model_config.get('gpu_nums', 1)
-        sample_batch_step = model_config.get("sample_batch_step")
-        model_config.update({"sample_batch_step": sample_batch_step//2})
-        # model_info.update({"state_dim": [42, 84, 4]})
+        sample_batch_step = model_config.get("sample_batch_step", None)
+        if sample_batch_step is not None:
+            model_config.update({"sample_batch_step": sample_batch_step//2})
+
+        batch_size = model_config.get('BATCH_SIZE', 200)
+        model_config.update({"BATCH_SIZE": batch_size//2})
 
         self.trainer_q = create_multi_trainer(self.gpu_nums, model_info)
 
@@ -296,6 +299,13 @@ def send_train_data_shared(state, label, gpu_nums, trainer_q, not_has_shared):
 
 
 def send_train_data(state, label, gpu_nums, trainer_q, first):
+    list_wrapper = None
+    if isinstance(state,list) and len(state) == 1:
+        list_wrapper = True
+    
+    if list_wrapper:
+        state = state[0] 
+           
     if gpu_nums == 2:
         t0 = time()
         shape = state.shape[0] // 2
@@ -305,7 +315,7 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
         state1 = state[shape:]
         label1 = [l[shape:] for l in label]
 
-        train_data = {'state': state1, 'label': label1}
+        train_data = {'state': [state1] if list_wrapper else state1, 'label': label1}
         train_msg = message(train_data, cmd="trainer")
         t2 = time()
 
@@ -313,7 +323,7 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
 
         t3 = time()
 
-        return state0, label0
+        return [state0] if list_wrapper else state0, label0
 
     else:
         raise NotImplementedError

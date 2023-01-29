@@ -81,7 +81,7 @@ from absl import logging
 # from tensorflow_core.python.framework import graph_util
 # from tensorflow import graph_util
 from tensorflow.compat.v1 import graph_util
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
