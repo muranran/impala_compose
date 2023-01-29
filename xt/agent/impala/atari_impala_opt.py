@@ -45,9 +45,15 @@ class AtariImpalaOpt(Agent):  # revised by ZZX. previous: AtariImpalaOpt(Cartpol
         super().__init__(env, alg, agent_config, **kwargs)
         self.keep_seq_len = True  # to keep max sequence length in explorer.
         self.next_logit = None
-        self.broadcast_weights_interval = agent_config.get("sync_model_interval", 1)
+        self.broadcast_weights_interval = agent_config.get(
+            "sync_model_interval", 1)
         self.sync_weights_count = self.broadcast_weights_interval  # 0, sync with start
 
+        # non-block parameters
+        if hasattr(alg, "prefetch"):
+            self.using_prefetch = alg.prefetch
+        else:
+            self.using_prefetch = False
         # vector environment will auto reset in step
         self.transition_data["done"] = False
         self.sample_vector = dict()
@@ -120,7 +126,8 @@ class AtariImpalaOpt(Agent):  # revised by ZZX. previous: AtariImpalaOpt(Cartpol
             _start = time()
             self.clear_transition()
 
-            state, self.last_info = self.do_one_interaction(state, use_explore, lock, gid, eid, need_info=True)
+            state, self.last_info = self.do_one_interaction(
+                state, use_explore, lock, gid, eid, need_info=True)
 
             if need_collect:
                 self.add_to_trajectory(self.transition_data)
@@ -189,7 +196,8 @@ class AtariImpalaOpt(Agent):  # revised by ZZX. previous: AtariImpalaOpt(Cartpol
     def get_trajectory(self, last_pred=None):
         for env_id in range(self.vector_env_size):
             for _data_key in ("cur_state", "logit", "action", "reward", "done", "info"):
-                self.trajectory[_data_key].extend(self.sample_vector[env_id][_data_key])
+                self.trajectory[_data_key].extend(
+                    self.sample_vector[env_id][_data_key])
 
         # merge data into env_num * seq_len
         for _data_key in self.trajectory:
@@ -202,10 +210,15 @@ class AtariImpalaOpt(Agent):  # revised by ZZX. previous: AtariImpalaOpt(Cartpol
         return trajectory
 
     def sync_model(self):
+        if not self.using_prefetch:
+            return self.sync_model_()
+
         if not hasattr(self, "first_recv_weight"):
-            logging.info("=================waiting model exp_{}==================".format(self.id))
+            logging.info(
+                "=================waiting model exp_{}==================".format(self.id))
             model_name = self.recv_explorer.recv(block=True)
-            logging.info("=================received model exp_{}==================".format(self.id))
+            logging.info(
+                "=================received model exp_{}==================".format(self.id))
             setattr(self, "first_recv_weight", None)
             return model_name
 
@@ -273,7 +286,8 @@ class AtariImpalaOpt(Agent):  # revised by ZZX. previous: AtariImpalaOpt(Cartpol
             self.step = (self.step + 1) % 128
         self._stats.env_step_time += time() - _start0
         self._stats.iters += 1
-        self.handle_env_feedback(next_raw_state, reward, done, info, use_explore)
+        self.handle_env_feedback(
+            next_raw_state, reward, done, info, use_explore)
         if need_info:
             return next_raw_state, info
         return next_raw_state
