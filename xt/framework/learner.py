@@ -81,17 +81,22 @@ class Learner(object):
 
         _model_dir = ["models", "benchmark"]
         self.bm_args = \
-            parse_benchmark_args(env_para, alg_para, agent_para, benchmark_info)
+            parse_benchmark_args(env_para, alg_para,
+                                 agent_para, benchmark_info)
         self.workspace, _archive, _job = \
-            make_workspace_if_not_exist(self.bm_args, _model_dir, task_name=self._name)
+            make_workspace_if_not_exist(
+                self.bm_args, _model_dir, task_name=self._name)
 
         self.bm_board = SummaryBoard(_archive, _job)
         self.model_path = os.path.join(self.workspace, _model_dir[0])
         logging.info("{}\nworkspace:\n\t{}\n".format("*" * 10, self.workspace))
 
         self.max_step = agent_para.get("agent_config", {}).get("complete_step")
-        self.max_episode = agent_para.get("agent_config", {}).get("complete_episode")
+        self.max_episode = agent_para.get(
+            "agent_config", {}).get("complete_episode")
         self._log_interval = benchmark_info.get("log_interval_to_train", 10)
+        self.resize_batch_size = env_para.get(
+            "env_info", {}).get("wait_num", 1)
 
         self._explorer_ids = list()
 
@@ -109,7 +114,8 @@ class Learner(object):
 
     def add_to_pbt(self, pbt_config, metric, weights):
         """Add this lerner to population."""
-        self._pbt_aid = PbtAid(self.name, self.alg_para, pbt_config, metric, weights)
+        self._pbt_aid = PbtAid(self.name, self.alg_para,
+                               pbt_config, metric, weights)
 
     @property
     def explorer_ids(self):
@@ -170,7 +176,8 @@ class Learner(object):
             log_interval=self._log_interval,
             name=self._name,
             shared_queue=self.shared_queue,
-            compress=self.compress
+            compress=self.compress,
+            resize_batch_size=self.resize_batch_size
         )
         self.train_worker.explorer_ids = self.explorer_ids
         self.train_worker.pbt_aid = self._pbt_aid
@@ -185,7 +192,8 @@ class Learner(object):
         """Start all system."""
         self.create_predictor()
         alg, trainer_obj, shared_list = build_alg_with_trainer(
-            deepcopy(self.alg_para), self.send_broker, self.model_path, self.process_num
+            deepcopy(
+                self.alg_para), self.send_broker, self.model_path, self.process_num
         )
         self.submit_algorithm(alg, trainer_obj, shared_list)
 
@@ -252,6 +260,7 @@ class TrainWorker(object):
         # compress weight comm
         self.shared_queue = kwargs.get("shared_queue", None)
         self.compress = kwargs.get("compress", False)
+        self.resize_batch_size = kwargs.get("resize_batch_size", 1)
 
     @property
     def explorer_ids(self):
@@ -288,7 +297,8 @@ class TrainWorker(object):
                         "pb_file": weight,
                         "input_names": ["state_input"],
                         "output_names": ["explore_agent/pi_logic_outs", "explore_agent/baseline"],
-                        "save_path": weight.replace(".pb", ".tflite")
+                        "save_path": weight.replace(".pb", ".tflite"),
+                        "resize_batch_size": self.resize_batch_size
                     }
                     raw_weight_queue.put(config)
                 else:
@@ -300,7 +310,8 @@ class TrainWorker(object):
                     logging.info("===================Invoke Compress Weight {}===================="
                                  .format(compress_weight))
                 else:
-                    logging.info("===================Invoke Compress Weight ====================")
+                    logging.info(
+                        "===================Invoke Compress Weight ====================")
                 self._dist_policy_(compress_weight, save_index, dist_cmd)
                 setattr(self, "first_commit", 0)
 
@@ -308,7 +319,8 @@ class TrainWorker(object):
         """Distribute model tool."""
         explorer_set = self.explorer_ids
 
-        ctr_info = self.alg.dist_model_policy.get_dist_info(save_index, explorer_set)
+        ctr_info = self.alg.dist_model_policy.get_dist_info(
+            save_index, explorer_set)
 
         if isinstance(ctr_info, dict):
             ctr_info = [ctr_info]
@@ -333,7 +345,8 @@ class TrainWorker(object):
             eval_ret = self.e_adapter.fetch_eval_result()
             if eval_ret:
                 logging.debug("eval stats: {}".format(eval_ret))
-                self.stats_deliver.send({"data": eval_ret, "is_bm": True}, block=True)
+                self.stats_deliver.send(
+                    {"data": eval_ret, "is_bm": True}, block=True)
 
     def _meet_stop(self):
         if self.max_step and self.actual_step > self.max_step:
@@ -347,7 +360,8 @@ class TrainWorker(object):
         return False
 
     def load_data(self):
-        max_load_times = 20
+        prepare_data_times = self.alg.prepare_data_times
+        max_load_times = prepare_data_times
         for _tf_val in range(max_load_times):
             # logging.debug("wait data for preparing-{}...".format(_tf_val))
             with self.logger.wait_sample_timer:
@@ -358,8 +372,8 @@ class TrainWorker(object):
                 self.alg.prepare_data(data["data"], ctr_info=data["ctr_info"])
             self.elapsed_episode += 1
 
-            if self.train_q.empty:
-                break
+            # if self.train_q.empty:
+            #     break
 
     def train(self):
         """Train model."""
@@ -444,7 +458,8 @@ class TrainWorker(object):
             else:
                 if self.alg.checkpoint_ready(self.train_count):
                     policy_weight = self.alg.get_weights()
-                    weight_msg = message(policy_weight, cmd="predict{}".format(self.name), sub_cmd='sync_weights')
+                    weight_msg = message(policy_weight, cmd="predict{}".format(
+                        self.name), sub_cmd='sync_weights')
                     self.model_q.send(weight_msg)
 
             if self.train_count % self._log_interval == 0:
@@ -466,10 +481,12 @@ class TrainWorker(object):
         data_dict = get_msg_data(train_data)
 
         # update multi agent train reward without done flag
-        if self.alg.alg_name in ("QMixAlg",) or self.alg.alg_name in ("SCCAlg",):  # fixme: unify the record op
+        # fixme: unify the record op
+        if self.alg.alg_name in ("QMixAlg",) or self.alg.alg_name in ("SCCAlg",):
             self.actual_step += np.sum(data_dict["filled"])
             self.won_in_episodes.append(data_dict.pop("battle_won"))
-            self.logger.update(explore_won_rate=np.nanmean(self.won_in_episodes))
+            self.logger.update(
+                explore_won_rate=np.nanmean(self.won_in_episodes))
 
             self.logger.record(
                 step=self.actual_step,

@@ -24,8 +24,8 @@ import numpy as np
 from collections import OrderedDict, deque
 from absl import logging
 
-from xt.model.tf_compat import tf
-
+# from xt.model.tf_compat import tf
+import tensorflow.compat.v1 as tf
 
 def restore_tf_variable(tf_sess, target_paras, model_name):
     """Restore explorer variable with tf.train.checkpoint."""

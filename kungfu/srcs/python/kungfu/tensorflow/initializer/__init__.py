@@ -1,4 +1,5 @@
-import tensorflow as tf
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from kungfu.tensorflow.compat import _tf_assign, _tf_hook, _tf_major_version
 from kungfu.tensorflow.ops import broadcast
 
