@@ -43,7 +43,7 @@ model_para:
       activation: relu
       hidden_sizes: [256]
 
-      gpu_nums: 2
+      gpu_nums: 3
     gpu_config:
       cluster:
         peers:
@@ -55,4 +55,4 @@ model_para:
 
 benchmark:
   archive_root: /home/data/dxa/xingtian_revise/xt_archive/mlppo
-  id: hrl_breakout_ppo_mml_bs640_shared
+  id: hrl_breakout_ppo_mml_bs320_shared_g3

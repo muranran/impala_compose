@@ -170,7 +170,7 @@ class MultiTrainer(object):
         gpu_self = gpu_config.get('self', None)
 
         # print("self.trainer_id =============== {}".format(self.trainer_id))
-        self.trainer_id = 1
+        # self.trainer_id = 1
         gpu_self.update({'rank': self.trainer_id})
 
         self.device_id = 0
@@ -336,16 +336,12 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
 
         for i in range(gpu_nums-1):
             train_data = {'state': [state_split[i]]
-                        if list_wrapper else state1, 'label': label1}
+                        if list_wrapper else state_split[i], 'label': label_split[i]}
             train_msg = message(train_data, cmd="trainer")
             trainer_q[i].send(train_msg)
-        t2 = time()
-
         
 
-        t3 = time()
-
-        return [state0] if list_wrapper else state0, label0
+        return [state_split[0]] if list_wrapper else state0, label_split[0]
         
     else:
         raise NotImplementedError
