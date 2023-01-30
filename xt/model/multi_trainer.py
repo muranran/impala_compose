@@ -42,10 +42,10 @@ class MultiTrainerModel(object):
         self.gpu_nums = model_config.get('gpu_nums', 1)
         sample_batch_step = model_config.get("sample_batch_step", None)
         if sample_batch_step is not None:
-            model_config.update({"sample_batch_step": sample_batch_step//2})
+            model_config.update({"sample_batch_step": sample_batch_step//self.gpu_nums})
 
         batch_size = model_config.get('BATCH_SIZE', 200)
-        model_config.update({"BATCH_SIZE": batch_size//2})
+        model_config.update({"BATCH_SIZE": batch_size//self.gpu_nums})
 
         self.trainer_q = create_multi_trainer(self.gpu_nums, model_info)
 
@@ -336,13 +336,12 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
 
         for i in range(gpu_nums-1):
             train_data = {'state': [state_split[i]]
-                        if list_wrapper else state_split[i], 'label': label_split[i]}
+                          if list_wrapper else state_split[i], 'label': label_split[i]}
             train_msg = message(train_data, cmd="trainer")
             trainer_q[i].send(train_msg)
-        
 
-        return [state_split[0]] if list_wrapper else state0, label_split[0]
-        
+        return [state_split[0]] if list_wrapper else state_split[0], label_split[0]
+
     else:
         raise NotImplementedError
 
