@@ -276,6 +276,7 @@ class AgentGroup(object):
         # fixme: remove model name file, and make sense to multi-agent.
         if is_id:
             weights = self.buf_stub.get(weights)
+            assert weights is not None, "Weights not found"
             model_weights = {"data": weights}
         else:
             model_weights = {"data": weights}

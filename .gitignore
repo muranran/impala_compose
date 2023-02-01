@@ -5,3 +5,6 @@ xt_archive
 xingtian.egg-info
 backup
 KungFu-lg-config.zip
+user/tmp
+user/model
+user/packages

@@ -105,6 +105,9 @@ class Learner(object):
         # compress weight comm
         self.shared_queue = kwargs.get("shared_queue", None)
         self.compress = kwargs.get("compress", False)
+        self.using_compress = alg_para["alg_config"].get(
+            "using_compress", False)
+        # self.compress_workers = alg_para.get("compress_workers",4)
 
         # For Cloud
         self.s3_path = None
@@ -177,7 +180,9 @@ class Learner(object):
             name=self._name,
             shared_queue=self.shared_queue,
             compress=self.compress,
-            resize_batch_size=self.resize_batch_size
+            resize_batch_size=self.resize_batch_size,
+            using_compress=self.using_compress,
+            # compress_workers=self.compress_workers
         )
         self.train_worker.explorer_ids = self.explorer_ids
         self.train_worker.pbt_aid = self._pbt_aid
@@ -262,6 +267,16 @@ class TrainWorker(object):
         self.compress = kwargs.get("compress", False)
         self.resize_batch_size = kwargs.get("resize_batch_size", 1)
 
+        self.using_compress = kwargs.get("using_compress", False)
+        if hasattr(self.alg, 'prefetch'):
+            self.prefetch = self.alg.prefetch
+        else:
+            self.prefetch = False
+        if self.using_compress:
+            from xt.framework.compress_test import CompressWeights
+            self.compress_manager = CompressWeights(num_workers=4)
+            self.compress_manager.start()
+
     @property
     def explorer_ids(self):
         return self._explorer_ids
@@ -281,6 +296,26 @@ class TrainWorker(object):
     def _dist_policy(self, weight=None, save_index=-1, dist_cmd="explore"):
         # compress weight
         # todo: if need_compress_weight
+        if self.using_compress:
+            self.compress_manager.compress(
+                weight, weight.replace(".h5", ".tflite"))
+            compress_weight = self.compress_manager.get_result()
+            
+            if not self.prefetch:
+                if compress_weight is None:
+                    compress_weight = self.compress_manager.get_result(block=True)
+                
+            if compress_weight is not None:
+                self._dist_policy_(compress_weight, save_index, dist_cmd)
+                # print("Synchronize weight with explorers:{}".format(compress_weight))
+            elif not hasattr(self, "first_commit"):
+                setattr(self, "first_commit", 0)
+                compress_weight = self.compress_manager.get_result(block=True)
+                assert compress_weight is not None
+                self._dist_policy_(compress_weight, save_index, dist_cmd)
+
+            return
+
         if not self.compress:
             self._dist_policy_(weight, save_index, dist_cmd)
         else:

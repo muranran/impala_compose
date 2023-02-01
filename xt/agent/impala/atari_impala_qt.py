@@ -33,7 +33,8 @@ from zeus.common.util.register import Registers
 
 
 @Registers.agent
-class AtariImpalaOpt(Agent):  # revised by ZZX. previous: AtariImpalaOpt(CartpoleImpala)
+# revised by ZZX. previous: AtariImpalaOpt(CartpoleImpala)
+class AtariImpalaOptQt(Agent):
     """Build Atari agent with IMPALA algorithm."""
 
     def __init__(self, env, alg, agent_config, **kwargs):

@@ -66,6 +66,7 @@ class IMPALAOptLite(Algorithm):
         self.async_flag = False
 
         self.prefetch = alg_config.get('prefetch', False)
+        self.using_compress = alg_config.get('using_compress', False)
         # update to divide model policy
         if not self.prefetch:
             self.dist_model_policy = FIFODistPolicy(
@@ -174,4 +175,8 @@ class IMPALAOptLite(Algorithm):
         #     self.fp32_actor = model_builder(self.fp32_model_info)
         # self.fp32_actor.set_tf_weights(self.actor.get_weights())
         # return self.fp32_actor.get_weights()
-        return self.actor.get_weights()
+        if self.using_compress:
+            weights = self.actor.save_as_h5()
+            return weights
+        else:
+            return self.actor.get_weights()

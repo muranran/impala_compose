@@ -1,6 +1,6 @@
 import logging
 import os
-from threading import Thread
+from threading import Thread, Lock
 from typing import List
 import setproctitle
 import zmq
@@ -27,7 +27,8 @@ class CompressWeights:
         self.context_list = []
         self.socket_list = []
 
-        self.task_queue = Queue()
+        self.quene_visit_lock = Lock()
+        self.task_queue = Queue(maxsize=10)
         self.result_queue = Queue()
 
         # compression parameters
@@ -50,16 +51,18 @@ class CompressWeights:
         self.hidden_workers.append(sp)
 
         sleep(0.1)
-        
+
         print("worker status: {}".format(sp.poll()))
-        
+
         self.create_comm_channel(port)
 
     def start_transfer(self, worker_id=0):
-        
+
+        count = 0
         while True:
 
             cmd = self.task_queue.get()
+
             if cmd.startswith("exit"):
                 self.socket_list[worker_id].send(b'exit')
                 # self.socket_list[worker_id].recv()
@@ -75,14 +78,16 @@ class CompressWeights:
 
             self.result_queue.put(target)
 
-            print("worker_{} complete status:".format(worker_id))
-            print("create_time:{}\nrestore_time:{}\nconvert_time:{}"
-                  .format(create_time, restore_time, convert_time))
+            # print("worker_{} in {} step".format(worker_id, count))
+            # count += 1
+            # print("worker_{} complete status:".format(worker_id))
+            # print("create_time:{}\nrestore_time:{}\nconvert_time:{}"
+            #       .format(create_time, restore_time, convert_time))
 
     def start(self):
         for worker_id in range(self.num_workers):
             self.create_compress_worker(5555+worker_id)
-        
+
         for worker_id in range(self.num_workers):
             self.workers.append(
                 Thread(target=self.start_transfer, args=(worker_id,)))
@@ -92,13 +97,30 @@ class CompressWeights:
 
     def compress(self, weights, target):
         compress_task = weights + " " + target
+        if self.task_queue.full():
+            self.task_queue.get()
+            
+        # while (not self.task_queue.empty()):
+        #     self.task_queue.get()
+
         self.task_queue.put(compress_task)
-        
-    def get_result(self):
-        if self.result_queue.empty():
-            return None
-        else:
-            return self.result_queue.get()
+        # self.status()
+
+    def get_result(self, block=False):
+        if block:
+            while (self.result_queue.empty()):
+                sleep(0.1)
+            assert not self.result_queue.empty(), "result queue is empty"
+
+        ret = None
+        if not self.result_queue.empty():
+
+            ret = self.result_queue.get()
+
+        if block:
+            assert ret is not None, "RWN {}".format(self.result_queue.qsize())
+
+        return ret
 
     def stop(self):
         for worker_id in range(self.num_workers):
@@ -111,10 +133,19 @@ class CompressWeights:
                   "exit", hidden_worker.poll())
             if hidden_worker.poll() is None:
                 hidden_worker.terminate()
-            
+
             sleep(0.5)
             print("hidden_worker_{}".format(hidden_worker_id),
                   "exit", hidden_worker.poll())
+
+    def status(self):
+        task_pile = self.task_queue.qsize()
+        worker_alive = [hidden_worker.poll()
+                        for hidden_worker in self.hidden_workers]
+        state_str = "{} ".format(task_pile) + \
+            ("{} "*self.num_workers).format(*worker_alive)
+        print("status", state_str)
+
 
 def test():
     testfiledir = "/home/data/dxa/xingtian_revise/impala_compose/user/model"
@@ -188,7 +219,6 @@ def main():
             break
 
     compress_weight_manager.stop()
-
 
 
 if __name__ == '__main__':

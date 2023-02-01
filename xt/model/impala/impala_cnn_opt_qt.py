@@ -198,7 +198,7 @@ class ImpalaCnnOptLiteQt(XTModel):
 
         self.infer_model = model1
 
-        print(model1.summary())
+        # print(model1.summary())
 
         # create learner
         self.ph_bp_logic_outs = tf.placeholder(self.dtype, shape=(None, self.action_dim),
@@ -345,9 +345,10 @@ class ImpalaCnnOptLiteQt(XTModel):
             else:
                 return (x.astype(np.float32) - mean) / std
 
-        # state = [state_transform2(s, self.sta_mean, self.sta_std)
-        #          for s in state]
-
+        state = [state_transform2(s, self.sta_mean, self.sta_std)
+                 for s in state]
+        if self.interpreter is None:
+            raise RuntimeError("No interpreter")
         batch_size = self.interpreter["input_shape"][0]
         real_batch_size = len(state)
         # state = [np.zeros((84, 84, 4), dtype=np.float32) for i in range(5)]
@@ -473,8 +474,12 @@ class ImpalaCnnOptLiteQt(XTModel):
             raise ModuleNotFoundError(
                 "bolt module not found under path:{}".format(module_path))
         bolt_interpreter = bolt.BoltModelWrapper.get_instance()
+
+        quant = 2
         bolt_interpreter.prepare(
-            bolt_model_path, self.inference_batchsize, self.action_dim)
+            bolt_model_path, self.inference_batchsize, self.action_dim, quant)
+
+        # print("restore bolt model: {}".format(bolt_model_path))
 
         # update interpreter info
         self.bolt_interpreter = {
@@ -508,19 +513,31 @@ class ImpalaCnnOptLiteQt(XTModel):
             self.bolt_interpreter["baseline_index"])
 
         # time.sleep(0.002)
-
-        return pi_logic_outs.tolist(), baseline.tolist()
-
-    def save_as_h5(self, filename: str):
-        if filename is None:
-            self.infer_model.save("./mymodel.h5")
+        quant = True
+        if quant:
+            return pi_logic_outs[range(0, self.inference_batchsize*2, 2)].tolist(), baseline.tolist()
         else:
-            if filename.endswith(".h5"):
+            return pi_logic_outs.tolist(), baseline.tolist()
 
-                self.infer_model.save(filename)
+    def save_as_h5(self, filename=None):
+        if filename is None:
+            if not hasattr(self, "model_num"):
+                setattr(self, "model_num", 0)
             else:
-                raise NotImplementedError(
-                    "unsupport file type {}".format(filename.split("[\/]")[-1]))
+                setattr(self, "model_num", (getattr(self, "model_num") + 1) % 25)
+            save_path = "/home/data/dxa/xingtian_revise/impala_compose/user/tmp/tmodel_{}.h5". \
+                format(getattr(self, "model_num"))
+            filename = save_path
+
+        if filename.endswith(".h5"):
+            set_session(self.sess)
+            self.infer_model.save(filename)
+
+        else:
+            raise NotImplementedError(
+                "unsupport file type {}".format(filename.split("[\/]")[-1]))
+
+        return filename
 
     def load_model(self, model_name, by_name=False):
         """Load model with inference variables."""
@@ -534,9 +551,11 @@ class ImpalaCnnOptLiteQt(XTModel):
                     self.inference = self.invoke_bolt
                     self.set_bolt_weight(weights)
                     self.interpreter = self.bolt_interpreter
+
                 else:
                     raise TypeError(
                         "{} doesn't end with .bolt".format(weights))
+
             else:
                 raise TypeError("{} is not path-like".format(weights))
 
@@ -579,6 +598,8 @@ class ImpalaCnnOptLiteQt(XTModel):
             raise NotImplementedError(
                 "{} has not been implemented".format(self.backend))
 
+        # assert self.interpreter is not None, "SW"
+
     def set_tflite_weights(self, weights):
         # logging.info(
         #     "====================Create TFLite Interpreter======================")
@@ -594,15 +615,19 @@ class ImpalaCnnOptLiteQt(XTModel):
         with self.graph.as_default():
             set_session(self.sess)
             # self.actor_var.set_weights(weights)
-            self.infer_model.set_weights(weights)
+            try:
+                self.infer_model.set_weights(weights)
+            except ValueError as e:
+                raise ValueError("weights error:{},{}".format(weights, e))
 
     def get_weights(self, backend="default"):
         """Get weights."""
         if backend == "default":
             with self.graph.as_default():
                 set_session(self.sess)
-                return self.infer_model.get_weights()
-
+                weights = self.infer_model.get_weights()
+            assert weights is not None, "weights must not be None"
+            return weights
         if backend == "default_":
             backend = self.backend
 
@@ -700,7 +725,8 @@ if __name__ == "__main__":
     model1.save_as_h5(keras_model)
     # model1.infer_model.save(keras_model)
     T0 = time.time()
-    model2 = tf.keras.models.load_model(keras_model,compile=False,custom_objects={"state_transform":model1._transform,"_initializer":custom_norm_initializer(0.01)})
+    model2 = tf.keras.models.load_model(keras_model, compile=False, custom_objects={
+                                        "state_transform": model1._transform, "_initializer": custom_norm_initializer(0.01)})
     model2.save_weights(testfiledir+"/weights.h5")
 
     compress_tool_file = "user/src/compress_tool.py"
@@ -709,9 +735,9 @@ if __name__ == "__main__":
     import subprocess as subp
     import shlex
     ret = subp.run(shlex.split("/home/tank/miniconda3/envs/qt/bin/python {} -w {} -o {}".format(
-        compress_tool_file,weight_file,tflite_model_file
-    )),capture_output=True, encoding='utf-8')
-    print("ret:\n",ret.stdout)
+        compress_tool_file, weight_file, tflite_model_file
+    )), capture_output=True, encoding='utf-8')
+    print("ret:\n", ret.stdout)
     print("convert model completed successfully")
     # with CustomObjectScope({"state_transform":model1._transform}):
     #     model2 = keras.models.load_model(keras_model)
@@ -721,18 +747,14 @@ if __name__ == "__main__":
     # converter = tf.lite.TFLiteConverter.from_keras_model_file(
     #     keras_model, custom_objects={"state_transform": model1._transform, "_initializer": None}
     #     )
-    
+
     # converter = tf2.lite.TFLiteConverter.from_keras_model(
     #     model1.infer_model)
-    
+
     # converter.inference_input_type = tf.uint8
     # converter.quantized_input_stats = {'state_input': (128, 127)}
-    
+
     # tflite_model = converter.convert()
-    
-     
-    
-   
 
     # T1 = time.time()
     # print("convert time: {:.2f}ms".format((T1-T0)*1000))

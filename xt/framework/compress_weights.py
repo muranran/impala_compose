@@ -143,19 +143,6 @@ class CompressWeights:
         return self.running_proc
 
 
-# backup
-# def serialize_bolt(model_file_path):
-#     model1 = tf.keras.models.load_model(model_file_path, custom_objects={"CustomModel": CustomModel})
-#     converter = tf.lite.TFLiteConverter.from_keras_model(model1)
-#     # converter.optimizations = [tf.lite.Optimize.DEFAULT]
-#     tflite_model = converter.convert()
-#     with open('./tmp/model/ppo_cnn.tflite', 'wb') as f:
-#         f.write(tflite_model)
-#
-#     p = subprocess.Popen('/home/tank/dxa/pure_bolt/bolt/install_linux-x86_64_avx2/tools/X2bolt -d ./tmp/model/'
-#                          ' -m ppo_cnn -i FP32', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-
 def empty_weights_proc_func(weights):
     return weights
 

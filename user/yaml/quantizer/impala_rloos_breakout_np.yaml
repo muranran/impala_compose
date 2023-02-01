@@ -2,30 +2,31 @@ alg_para:
   alg_name: IMPALAOptLite
   alg_config:
     train_per_checkpoint: 1
-    prepare_times_per_train: 2
-    BATCH_SIZE: 320
-    prefetch: False
+    prepare_times_per_train: 8
+    BATCH_SIZE: 160
+    using_compress: &using_compress False
+    prefetch: True
 
 env_para:
   env_name: EnvPool
   env_info:
     name: BreakoutNoFrameskip-v4
     vision: False
-    vector_env_size: 1
-    size: 1
-    wait_num: &infer_batch 1
+    vector_env_size: 5
+    wait_num: &infer_batch 2
+    size: *infer_batch
 
-env_num: 24
-group_num: 1
-speedup: 1
+env_num: 12
+group_num: 4
+speedup: 3
 compress: False
 
 agent_para:
-  agent_name: AtariImpalaOpt
+  agent_name: AtariImpalaOptQt
   agent_num: 1
   agent_config:
     max_steps: 160
-    complete_step: 10020000
+    complete_step: 5020000 # 10020000
 
 model_para:
   actor:
@@ -52,5 +53,6 @@ model_para:
 #    backend: tflite
 
 benchmark:
-  archive_root: /home/data/dxa/xingtian_revise/xt_archive/quantizer_testing
-  id: hrl_breakout_qt
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/quantizer_quality_test
+  # id: hrl_breakout_qt_fet8_b8
+  id: xingtian_breakout_env24_nfet_b2
