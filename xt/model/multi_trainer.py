@@ -40,9 +40,12 @@ class MultiTrainerModel(object):
         model_name = model_info['model_name']
         model_config = model_info.get('model_config', None)
         self.gpu_nums = model_config.get('gpu_nums', 1)
-        sample_batch_step = model_config.get("sample_batch_step")
-        model_config.update({"sample_batch_step": sample_batch_step//2})
-        # model_info.update({"state_dim": [42, 84, 4]})
+        sample_batch_step = model_config.get("sample_batch_step", None)
+        if sample_batch_step is not None:
+            model_config.update({"sample_batch_step": sample_batch_step//self.gpu_nums})
+
+        batch_size = model_config.get('BATCH_SIZE', 200)
+        model_config.update({"BATCH_SIZE": batch_size//self.gpu_nums})
 
         self.trainer_q = create_multi_trainer(self.gpu_nums, model_info)
 
@@ -167,10 +170,10 @@ class MultiTrainer(object):
         gpu_self = gpu_config.get('self', None)
 
         # print("self.trainer_id =============== {}".format(self.trainer_id))
-        self.trainer_id = 1
+        # self.trainer_id = 1
         gpu_self.update({'rank': self.trainer_id})
 
-        self.device_id = 1
+        self.device_id = 0
         os.environ["KUNGFU_CUDA_VISIBLE_DEVICES"] = str(self.device_id)
         os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
         init_from_config(gpu_config)
@@ -296,6 +299,13 @@ def create_trainer(trainer_id, model_info, device_id):
 
 
 def send_train_data(state, label, gpu_nums, trainer_q, first):
+    list_wrapper = None
+    if isinstance(state, list) and len(state) == 1:
+        list_wrapper = True
+
+    if list_wrapper:
+        state = state[0]
+
     if gpu_nums == 2:
         t0 = time()
         shape = state.shape[0] // 2
@@ -305,7 +315,8 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
         state1 = state[shape:]
         label1 = [l[shape:] for l in label]
 
-        train_data = {'state': state1, 'label': label1}
+        train_data = {'state': [state1]
+                      if list_wrapper else state1, 'label': label1}
         train_msg = message(train_data, cmd="trainer")
         t2 = time()
 
@@ -313,7 +324,23 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
 
         t3 = time()
 
-        return state0, label0
+        return [state0] if list_wrapper else state0, label0
+    elif gpu_nums >= 3:
+        t0 = time()
+        shape = state.shape[0] // gpu_nums
+        state_split = []
+        label_split = []
+        for i in range(gpu_nums):
+            state_split.append(state[shape*i:shape*(i+1)])
+            label_split.append([l[shape*i:shape*(i+1)] for l in label])
+
+        for i in range(gpu_nums-1):
+            train_data = {'state': [state_split[i]]
+                          if list_wrapper else state_split[i], 'label': label_split[i]}
+            train_msg = message(train_data, cmd="trainer")
+            trainer_q[i].send(train_msg)
+
+        return [state_split[0]] if list_wrapper else state_split[0], label_split[0]
 
     else:
         raise NotImplementedError
@@ -333,5 +360,5 @@ def allreduce_optimizer(lr, function, with_keras=False, **kwargs):
         optimizer = SynchronousSGDOptimizer(
             optimizer, with_keras=True, nccl=True)
     else:
-        optimizer = SynchronousSGDOptimizer(optimizer, nccl=True)
+        optimizer = SynchronousSGDOptimizer(optimizer, nccl=False)
     return optimizer
