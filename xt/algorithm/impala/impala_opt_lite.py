@@ -42,18 +42,6 @@ class IMPALAOptLite(Algorithm):
     def __init__(self, model_info, alg_config, **kwargs):
         import_config(globals(), alg_config)
         self.type = model_info["actor"].get("type", "actor")
-        # if self.type == "learner":
-        #     fp32_model_info = deepcopy(model_info["actor"])
-        #     fp32_model_info.update({"input_dtype": "float32"})
-        #     # fixme: should be replaced with more generic
-        #     fp32_model_info.update({"model_name": "ImpalaCnnOptLite"})
-        #     fp32_model_info.update({"type": "actor"})
-        #     # self.fp32_actor = model_builder(fp32_model_info)
-        #     self.fp32_model_info = fp32_model_info
-
-        # else:
-        #     # fixme: multi trainer
-        #     model_info["actor"].update({"model_name": "ImpalaCnnOptLite"})
 
         super().__init__(alg_name="impala",
                          model_info=model_info["actor"],
@@ -65,9 +53,10 @@ class IMPALAOptLite(Algorithm):
         self.rewards = list()
         self.async_flag = False
 
+        # common parameters
         self.prefetch = alg_config.get('prefetch', False)
         self.using_compress = alg_config.get('using_compress', False)
-        # update to divide model policy
+
         if not self.prefetch:
             self.dist_model_policy = FIFODistPolicy(
                 alg_config["instance_num"],
@@ -170,11 +159,7 @@ class IMPALAOptLite(Algorithm):
         return states, behavior_logits, actions, dones, rewards
 
     def get_weights(self):
-        """Get the actor model weights as default."""
-        # if not hasattr(self, "fp32_actor"):
-        #     self.fp32_actor = model_builder(self.fp32_model_info)
-        # self.fp32_actor.set_tf_weights(self.actor.get_weights())
-        # return self.fp32_actor.get_weights()
+
         if self.using_compress:
             weights = self.actor.save_as_h5()
             return weights

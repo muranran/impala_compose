@@ -1,0 +1,59 @@
+alg_para:
+  alg_name: IMPALALite
+  alg_config:
+    train_per_checkpoint: 1
+    prepare_times_per_train: 1
+    BATCH_SIZE: 200
+    using_compress: &using_compress False
+    prefetch: False
+    episode_len: 200
+
+env_para:
+  env_name: GymEnvPool
+  env_info:
+    name: CartPole-v0
+    vision: False
+    size: &num_env 1
+    vector_env_size: *num_env
+    wait_num: &infer_batch 1
+    dim: [4]
+
+env_num: 10
+group_num: 1
+speedup: 1
+compress: False
+
+agent_para:
+  agent_name: GymImpalaLite
+  agent_num: 1
+  agent_config:
+    max_steps: 200
+    complete_step: 1020000 # 10020000
+
+model_para:
+  actor:
+    model_name: ImpalaMlpLite
+    state_dim: [4]
+    action_dim: 2
+    input_dtype: float32
+    state_mean: 0.0
+
+    model_config:
+      LR: 0.0005
+      sample_batch_step: 200
+
+      gpu_nums: 2
+    gpu_config:
+      cluster:
+        peers:
+      self:
+        rank:
+    backend: tf #tf, tflite, bolt
+    inference_batchsize: *infer_batch
+    using_multi_learner: False
+#    backend: tflite
+
+benchmark:
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/quantizer_quality_test
+  # id: hrl_breakout_qt_fet8_b8
+  id: xingtian_breakout_env24_nfet_b2

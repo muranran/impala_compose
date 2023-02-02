@@ -1,0 +1,68 @@
+alg_para:
+  alg_name: PPOLite
+  alg_config:
+    process_num: 1
+    prefetch: False
+
+env_para:
+  env_name: GymEnvPool
+  env_info:
+    name: CartPole-v0
+    vision: False
+    vector_env_size: 1
+    size: 1
+    wait_num: &infer_batch 1
+    dim: [4]
+
+# env_para:
+#   env_name: GymEnv
+#   env_info:
+#     name: CartPole-v0
+#     vision: False
+
+agent_para:
+  agent_name: PPOLite
+  agent_num: 1
+  agent_config:
+    max_steps: 200
+    complete_step: 1000000
+    complete_episode: 9000
+
+model_para:
+  actor:
+    model_name: PpoMlp
+    state_dim: [4]
+    action_dim: 2
+    input_dtype: float32
+    model_config:
+      BATCH_SIZE: 200
+      CRITIC_LOSS_COEF: 1.0
+      ENTROPY_LOSS: 0.01
+      LR: 0.0003
+      LOSS_CLIPPING: 0.2
+      MAX_GRAD_NORM: 5.0
+      NUM_SGD_ITER: 8
+      SUMMARY: False
+      VF_SHARE_LAYERS: False
+      activation: tanh
+      hidden_sizes: [64, 64]
+
+      gpu_nums: 2
+    gpu_config:
+      cluster:
+        peers:
+      self:
+        rank:
+    backend: tf #tf, tflite, bolt
+    inference_batchsize: 1
+    using_multi_learner: True
+
+env_num: 10
+group_num: 1
+speedup: 1
+compress: False
+
+benchmark:
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/gym_data
+  id: hrl_breakout_env10_mlg2_nfet
+  # id: xingtian_cartpole_env2_nfet

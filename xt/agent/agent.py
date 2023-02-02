@@ -61,6 +61,7 @@ class Agent(object):
 
     def clear_trajectory(self):
         self.trajectory.clear()
+        self.reset()
 
     def get_trajectory(self, last_pred=None):
         """Get trajectory"""
@@ -115,16 +116,18 @@ class Agent(object):
         self._stats.env_step_time += time() - _start1
         self._stats.iters += 1
 
-        self.handle_env_feedback(next_raw_state, reward, done, info, use_explore)
+        self.handle_env_feedback(
+            next_raw_state, reward, done, info, use_explore)
         return next_raw_state
 
     def handle_env_feedback(self, next_raw_state, reward, done, info, use_explore):
         self.transition_data.update(
-            {"next_state": next_raw_state, "reward": reward, "done": done, "info": info}
+            {"next_state": next_raw_state, "reward": reward,
+                "done": done, "info": info}
         )
         raise NotImplementedError
 
-    def run_one_episode(self, use_explore, need_collect):
+    def run_one_episode(self, use_explore, need_collect, *args, **kwargs):
         """
         Do interaction with max steps in each episode.
 

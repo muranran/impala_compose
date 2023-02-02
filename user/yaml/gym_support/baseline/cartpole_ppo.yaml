@@ -1,0 +1,47 @@
+alg_para:
+  alg_name: PPO
+  alg_config:
+    process_num: 1
+    # save_model: True # default False
+    # save_interval: 100
+
+env_para:
+  env_name: GymEnv
+  env_info:
+    name: CartPole-v0
+    vision: False
+
+agent_para:
+  agent_name: PPO
+  agent_num: 1
+  agent_config:
+    max_steps: 200
+    complete_step: 1000000
+    complete_episode: 9000
+
+model_para:
+  actor:
+    model_name: PpoMlp
+    state_dim: [4]
+    action_dim: 2
+    input_dtype: float32
+    model_config:
+      BATCH_SIZE: 200
+      CRITIC_LOSS_COEF: 1.0
+      ENTROPY_LOSS: 0.01
+      LR: 0.0003
+      LOSS_CLIPPING: 0.2
+      MAX_GRAD_NORM: 5.0
+      NUM_SGD_ITER: 8
+      SUMMARY: False
+      VF_SHARE_LAYERS: False
+      activation: tanh
+      hidden_sizes: [64, 64]
+
+env_num: 10
+speedup: 0
+
+benchmark:
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/gym_data
+  # id: hrl_breakout_qt_fet8_b8
+  id: xingtian_cartpole_env10_nfet
