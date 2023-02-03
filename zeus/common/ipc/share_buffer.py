@@ -156,7 +156,8 @@ class ShareBuf(object):
                 client = self.connect()
                 buf = client.get_buffers([object_id], timeout_ms=10)[0]
             except BaseException as error:
-                logging.info("try-{} to get buffer except: {}".format(_t, error))
+                logging.info(
+                    "try-{} to get buffer except: {}".format(_t, error))
                 pid = os.getpid()
                 del self.client[pid]
                 continue
@@ -164,6 +165,7 @@ class ShareBuf(object):
                 break
 
         data = deserialize(buf) if buf else {"data": None}
+        # assert data["data"] is not None, "weight is None"
         # data = deserialize(client.get_buffers([object_id])[0])
         return data
 
@@ -188,7 +190,8 @@ class ShareBuf(object):
         try:
             client = plasma.connect(self.path, int_num_retries=3)
         except:
-            cmd_str = "plasma_store -m {} -s {}".format(self.size_shared_mem, self.path)
+            cmd_str = "plasma_store -m {} -s {}".format(
+                self.size_shared_mem, self.path)
             Popen(cmd_str, shell=True, stderr=PIPE)
             logging.info("share buf: {}".format(cmd_str))
             time.sleep(0.1)

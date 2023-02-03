@@ -24,6 +24,7 @@ import numpy as np
 from xt.algorithm import Algorithm
 from zeus.common.util.register import Registers
 from zeus.common.util.common import import_config
+from xt.algorithm.alg_utils import DivideDistPolicy, FIFODistPolicy, EqualDistPolicy, BroadcastAllPolicy
 
 
 @Registers.algorithm
@@ -53,6 +54,14 @@ class PPOLite(Algorithm):
             self.actor.load_model(model_info['finetune_weight'], by_name=True)
             logging.info('load finetune weight: {}'.format(
                 model_info['finetune_weight']))
+
+        # common parameters
+        self.prefetch = alg_config.get('prefetch', False)
+        self.using_compress = alg_config.get('using_compress', False)
+
+        if self.prefetch:
+            self.dist_model_policy = BroadcastAllPolicy(
+                alg_config["instance_num"], prepare_times=self._prepare_times_per_train)
 
     def _init_train_list(self):
         self.obs = list()

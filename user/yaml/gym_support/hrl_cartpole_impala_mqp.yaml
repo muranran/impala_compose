@@ -1,9 +1,9 @@
 alg_para:
   alg_name: IMPALALite
   alg_config:
-    train_per_checkpoint: 1
-    prepare_times_per_train: 1
-    BATCH_SIZE: 200
+    # train_per_checkpoint: 1
+    prepare_times_per_train: 2
+    BATCH_SIZE: 800
     using_compress: &using_compress False
     prefetch: False
     episode_len: 200
@@ -42,7 +42,7 @@ model_para:
       LR: 0.0005
       sample_batch_step: 200
 
-      gpu_nums: 2
+      gpu_nums: 4
     gpu_config:
       cluster:
         peers:
@@ -50,10 +50,10 @@ model_para:
         rank:
     backend: tf #tf, tflite, bolt
     inference_batchsize: *infer_batch
-    using_multi_learner: False
+    using_multi_learner: True
 #    backend: tflite
 
 benchmark:
-  archive_root: /home/data/dxa/xingtian_revise/xt_archive/quantizer_quality_test
-  # id: hrl_breakout_qt_fet8_b8
-  id: xingtian_breakout_env24_nfet_b2
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/gym_data
+  id: hrl_cartpole_impala_mlg4_nfet_c2
+  # id: xingtian_breakout_env10_nfet_b2

@@ -42,7 +42,8 @@ class MultiTrainerModel(object):
         self.gpu_nums = model_config.get('gpu_nums', 1)
         sample_batch_step = model_config.get("sample_batch_step", None)
         if sample_batch_step is not None:
-            model_config.update({"sample_batch_step": sample_batch_step//self.gpu_nums})
+            model_config.update(
+                {"sample_batch_step": sample_batch_step//self.gpu_nums})
 
         batch_size = model_config.get('BATCH_SIZE', 200)
         model_config.update({"BATCH_SIZE": batch_size//self.gpu_nums})
@@ -53,6 +54,7 @@ class MultiTrainerModel(object):
 
         self.model_ = Registers.model[model_name](model_info)
 
+        self.model_name = model_name
         self.first = True
 
     def create_model(self, model_info):
@@ -71,7 +73,7 @@ class MultiTrainerModel(object):
         """Train the model."""
         T0 = time()
         state_split, label_split = send_train_data(
-            state, label, self.gpu_nums, self.trainer_q, self.first)
+            state, label, self.gpu_nums, self.trainer_q, self.first, model_name=self.model_name)
         T1 = time()
         loss = self.model_.train(state_split, label_split)
         T2 = time()
@@ -238,67 +240,31 @@ def create_trainer(trainer_id, model_info, device_id):
     return trainer.request_q
 
 
-# def send_train_data(state, label, gpu_nums, trainer_q):
-#     # 发送给model训练的数据到request_q
-#     # print("state.shape = ============================", state.shape)
-#     # impala 需要state.shape[0] // gpu_nums state.shape = (1280, 84, 84, 48)
-#     # ppo 需要state[0].shape[0] // gpu_nums state[0].shape = (1280, 84, 84, 48)
-#     # print("state.shape ============== {}".format(state.shape))
-#     shape_split = state[0].shape[0] // gpu_nums  # 数据个数1280
-#
-#     state_split = [[] for i in range(gpu_nums)]
-#     label_split = [[] for i in range(gpu_nums)]
-#
-#     for j in range(gpu_nums):
-#         for i in range(len(state)):
-#             # state[i]
-#             input_split = state[i][j * shape_split: (j + 1) * shape_split]
-#             state_split[j].append(input_split)
-#
-#         for i in range(len(label)):
-#             input_split = label[i][j * shape_split: (j + 1) * shape_split]
-#             label_split[j].append(input_split)
-#
-#     for j in range(gpu_nums - 1):
-#         train_data = {'state': state_split[j + 1], 'label': label_split[j + 1]}
-#         train_msg = message(train_data, cmd="trainer")
-#         trainer_q[j].send(train_msg)
-#
-#     return state_split[0], label_split[0]
-# def send_train_data_shared(state, label, gpu_nums, trainer_q, not_has_shared):
-#     shape = state.shape[0] // 2
-#     shared_state = snp.ndarray((shape, *state.shape[1:]), dtype=state.dtype)
-#     shared_label0 = snp.ndarray(
-#         (shape, *label[0].shape[1:]), dtype=label[0].dtype)
-#     shared_label1 = snp.ndarray(
-#         (shape, *label[1].shape[1:]), dtype=label[1].dtype)
-#     shared_label2 = snp.ndarray(
-#         (shape, *label[2].shape[1:]), dtype=label[2].dtype)
-#     shared_label3 = snp.ndarray(
-#         (shape, *label[3].shape[1:]), dtype=label[3].dtype)
+def send_catpole_impala_data(state, label, gpu_nums, trainer_q):
+    state_split = [[] for i in range(gpu_nums)]
+    label_split = [[] for i in range(gpu_nums)]
+    shape = state[0].shape[0] // gpu_nums
 
-#     if not_has_shared:
-#         trainer_q[0].put(shared_state)
-#         trainer_q[0].put(shared_label0)
-#         trainer_q[0].put(shared_label1)
-#         trainer_q[0].put(shared_label2)
-#         trainer_q[0].put(shared_label3)
+    for i in range(gpu_nums):
+        state_split[i].append(state[0][shape*i:shape*(i+1)])
+        state_split[i].append(state[1][shape*i:shape*(i+1)])
 
-#     state0 = state[:shape]
-#     label0 = [l[:shape] for l in label]
+        label_split[i].append(label[0][shape*i:shape*(i+1)])
+        label_split[i].append(label[1][shape*i:shape*(i+1)])
 
-#     shared_state[:] = state[shape:]
-#     shared_label0[:] = label[0][shape:]
-#     shared_label1[:] = label[1][shape:]
-#     shared_label2[:] = label[2][shape:]
-#     shared_label3[:] = label[3][shape:]
-
-#     trainer_q[0].put(b"1")
-
-#     return state0, label0
+    for i in range(gpu_nums-1):
+        train_data = {'state': state_split[i+1], 'label': label_split[i+1]}
+        train_msg = message(train_data, cmd="trainer")
+        trainer_q[i].send(train_msg)
+        
+    return state_split[0],label_split[0]
 
 
-def send_train_data(state, label, gpu_nums, trainer_q, first):
+def send_train_data(state, label, gpu_nums, trainer_q, first, **kwargs):
+    model_name = kwargs.get("model_name")
+    if model_name == "ImpalaMlpLite":
+        return send_catpole_impala_data(state, label, gpu_nums, trainer_q)
+
     list_wrapper = None
     if isinstance(state, list) and len(state) == 1:
         list_wrapper = True
@@ -308,6 +274,7 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
 
     if gpu_nums == 2:
         t0 = time()
+
         shape = state.shape[0] // 2
         state0 = state[:shape]
         label0 = [l[:shape] for l in label]
@@ -327,6 +294,7 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
         return [state0] if list_wrapper else state0, label0
     elif gpu_nums >= 3:
         t0 = time()
+
         shape = state.shape[0] // gpu_nums
         state_split = []
         label_split = []
@@ -335,8 +303,8 @@ def send_train_data(state, label, gpu_nums, trainer_q, first):
             label_split.append([l[shape*i:shape*(i+1)] for l in label])
 
         for i in range(gpu_nums-1):
-            train_data = {'state': [state_split[i]]
-                          if list_wrapper else state_split[i], 'label': label_split[i]}
+            train_data = {'state': [state_split[i+1]]
+                          if list_wrapper else state_split[i+1], 'label': label_split[i+1]}
             train_msg = message(train_data, cmd="trainer")
             trainer_q[i].send(train_msg)
 

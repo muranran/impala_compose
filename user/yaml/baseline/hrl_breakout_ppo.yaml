@@ -1,0 +1,61 @@
+alg_para:
+  alg_name: PPOLite
+  alg_config:
+    train_per_checkpoint: 1
+    prepare_times_per_train: 2
+    BATCH_SIZE: 320
+    prefetch: True
+
+env_para:
+  env_name: EnvPool
+  env_info:
+    name: BreakoutNoFrameskip-v4
+    vision: False
+    vector_env_size: &num_env 3
+    size: *num_env
+    wait_num: &infer_batch 3
+
+env_num: 12
+group_num: 4
+speedup: 3
+compress: False
+
+agent_para:
+  agent_name: AtariPpoLiteFix
+  agent_num: 1
+  agent_config:
+    max_steps: 160
+    complete_step: 10000000
+
+model_para:
+  actor:
+    model_name: PpoCnnLite
+    state_dim: [84, 84, 4]
+    action_dim: 4
+    input_dtype: uint8
+    model_config:
+      BATCH_SIZE: 160
+      CRITIC_LOSS_COEF: 1.0
+      ENTROPY_LOSS: 0.003
+      LOSS_CLIPPING: 0.1
+      LR: 0.00025
+      MAX_GRAD_NORM: 5.0
+      NUM_SGD_ITER: 4
+      SUMMARY: False
+      VF_SHARE_LAYERS: True
+      activation: relu
+      hidden_sizes: [256]
+
+      gpu_nums: 4
+    gpu_config:
+      cluster:
+        peers:
+      self:
+        rank:
+    backend: tf #tf, tflite, bolt
+    inference_batchsize: *infer_batch
+    using_multi_learner: False
+
+benchmark:
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/baseline
+  id: hrl_breakout_ppo_

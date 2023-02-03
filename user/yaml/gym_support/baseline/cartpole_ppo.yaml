@@ -42,6 +42,6 @@ env_num: 10
 speedup: 0
 
 benchmark:
-  archive_root: /home/data/dxa/xingtian_revise/xt_archive/gym_data
+  archive_root: /home/data/dxa/xingtian_revise/xt_archive/gym_data_gu
   # id: hrl_breakout_qt_fet8_b8
   id: xingtian_cartpole_env10_nfet

@@ -17,29 +17,35 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-"""Build base agent for PPO algorithm."""
+"""Build Atari agent for ppo algorithm."""
 
-import logging
-from time import sleep, time
 import numpy as np
-from collections import defaultdict, deque
 
-from xt.agent import Agent
+from absl import logging
+from xt.agent.ppo.ppo import PPO
 from xt.agent.ppo.default_config import GAMMA, LAM
 from zeus.common.util.register import Registers
+from collections import defaultdict, deque
+from time import time
 from zeus.common.ipc.message import message, set_msg_info
 
 
 @Registers.agent
-class PPOLite(Agent):
-    """Build base agent with PPO algorithm."""
+class AtariPpoLiteFix(PPO):
+    """Atari Agent with PPO algorithm."""
 
     def __init__(self, env, alg, agent_config, **kwargs):
+        super().__init__(env, alg, agent_config, **kwargs)
+        self.keep_seq_len = True
+        self.next_state = None
+        self.next_action = None
+        self.next_value = None
+        self.next_log_p = None
+
         # pipeline parameters
         self.vector_env_size = kwargs.pop("vector_env_size")
         self.wait_num = kwargs.pop("wait_num")
 
-        super().__init__(env, alg, agent_config, **kwargs)
         # non-block parameters
         if hasattr(alg, "prefetch"):
             self.using_prefetch = alg.prefetch
@@ -56,7 +62,6 @@ class PPOLite(Agent):
         self.reward_track = deque(
             maxlen=self.vector_env_size * self.broadcast_weights_interval)
         self.reward_per_env = defaultdict(float)
-
         # added by ZZX
         self.last_info = [{'env_id': _} for _ in range(self.wait_num)]
 
@@ -196,11 +201,12 @@ class PPOLite(Agent):
                 self.env.reset()
                 state = self.env.get_init_state()
 
-        last_state = []
-        for env_id in range(self.vector_env_size):
-            last_state.append(self.sample_vector[env_id]["cur_state"][-1])
+        # last_state = []
+        # for env_id in range(self.vector_env_size):
+        #     last_state.append(self.sample_vector[env_id]["cur_state"][-1])
 
-        last_state = np.stack(last_state)
+        # last_state = np.stack(last_state)
+        last_state = state
 
         last_pred = self.alg.predict(last_state)
 
